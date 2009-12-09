@@ -1,0 +1,80 @@
+---
+:R:
+  FUSE_ACCESS: fuse_access_in
+# FUSE_CREATE: fuse_open_in char
+  FUSE_CREATE: fuse_create_in char
+  FUSE_FLUSH: fuse_flush_in
+  FUSE_FORGET: fuse_forget_in
+  FUSE_FSYNCDIR: fuse_fsync_in
+  FUSE_FSYNC: fuse_fsync_in
+# this was pre-7.9
+# FUSE_GETATTR: ""
+  FUSE_GETATTR: fuse_getattr_in 
+  FUSE_GETLK: fuse_lk_in_out
+  FUSE_GETXATTR: fuse_getxattr_in char
+  FUSE_IOCTL: fuse_ioctl_in char
+  FUSE_INIT: fuse_init_in
+  FUSE_LINK: fuse_link_in char
+  FUSE_LISTXATTR: fuse_getxattr_in
+  FUSE_LOOKUP: char
+  FUSE_MKDIR: fuse_mkdir_in char
+  FUSE_MKNOD: fuse_mknod_in char
+  FUSE_OPENDIR: fuse_open_in
+  FUSE_OPEN: fuse_open_in
+  FUSE_READDIR: fuse_read_in
+  FUSE_READ: fuse_read_in
+  FUSE_READLINK: ""
+  FUSE_RELEASEDIR: fuse_release_in
+  FUSE_RELEASE: fuse_release_in
+  FUSE_REMOVEXATTR: char
+  FUSE_RENAME: fuse_rename_in string string
+  FUSE_RMDIR: char
+  FUSE_SETATTR: fuse_setattr_in
+  FUSE_SETLK: fuse_lk_in
+  FUSE_SETLKW: fuse_lk_in
+  FUSE_SETXATTR: fuse_setxattr_in char
+  FUSE_STATFS: ""
+  FUSE_SYMLINK: char
+  FUSE_UNLINK: char
+  FUSE_WRITE: fuse_write_in char
+:W:
+  FUSE_ACCESS: ""
+  FUSE_CREATE: fuse_entry_out fuse_open_out
+  FUSE_FLUSH: ""
+  FUSE_FORGET:
+  FUSE_FSYNC: ""
+  FUSE_FSYNCDIR: ""
+  FUSE_GETATTR: fuse_attr_out
+  FUSE_GETLK: fuse_lk_out
+  FUSE_GETXATTR: char
+# can also be like:
+# FUSE_GETXATTR: fuse_getxattr_out
+# code has special handler
+  FUSE_IOCTL: fuse_ioctl_out char
+  FUSE_INIT: fuse_init_out
+  FUSE_LINK: fuse_entry_out
+  FUSE_LISTXATTR: char
+# can also be like:
+# FUSE_LISTXATTR: fuse_getxattr_out
+# code has special handler
+  FUSE_LOOKUP: fuse_entry_out
+  FUSE_MKDIR: fuse_entry_out
+  FUSE_MKNOD: fuse_entry_out
+  FUSE_OPENDIR: fuse_open_out
+  FUSE_OPEN: fuse_open_out
+  FUSE_READ: char
+  FUSE_READDIR: char
+  FUSE_READLINK: char
+  FUSE_RELEASE: ""
+  FUSE_RELEASEDIR: ""
+  FUSE_REMOVEXATTR:
+  FUSE_RENAME: ""
+  FUSE_RMDIR: ""
+  FUSE_SETATTR: fuse_attr_out
+  FUSE_SETLK: ""
+  FUSE_SETLKW: ""
+  FUSE_SETXATTR: ""
+  FUSE_STATFS: fuse_statfs_out
+  FUSE_SYMLINK: fuse_entry_out
+  FUSE_UNLINK: ""
+  FUSE_WRITE: fuse_write_out
