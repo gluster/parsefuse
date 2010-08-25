@@ -16,7 +16,7 @@ end
 class String
 
   def sinsp
-    inspect.gsub(/\\0+/, '\\\\0')
+    inspect.gsub(/\\x00|\\0+/, '\\\\0').gsub(/\\x0/, '\x')
   end
 
 end
@@ -290,7 +290,7 @@ class FuseMsg
 
   def self.sizeof tnam
     @hcac ||= {}
-    @hcac[tnam] ||= Ctypes[:Struct][tnam].transpose[0].instance_eval {|tt|
+    @hcac[tnam] ||= Ctypes[:Struct][tnam].transpose[0].instance_eval { tt = self
       ([0]*tt.size).pack(tt.map {|t| Zipcodes[t] }.join).size
     }
   end
@@ -347,9 +347,9 @@ if __FILE__ == $0
   protoh = nil
   msgy = nil
   OptionParser.new do |op|
-    op.on('-l', '--limit N', Integer) { |limit| }
-    op.on('-p', '--proto_head F') { |protoh| }
-    op.on('-m', '--msgdef F') { |msgy| }
+    op.on('-l', '--limit N', Integer) { |v| limit = v }
+    op.on('-p', '--proto_head F') { |v| protoh = v }
+    op.on('-m', '--msgdef F') { |v| msgy = v }
   end.parse!
   FuseMsg.import_proto protoh, msgy
   FuseMsg.read_stream($<) { |m|
