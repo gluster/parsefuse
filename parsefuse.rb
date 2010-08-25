@@ -2,6 +2,7 @@
 
 require 'rubygems'
 require 'stringio'
+require 'yaml'
 require 'cast'
 
 class Object
