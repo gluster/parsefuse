@@ -10,7 +10,7 @@
 # this was pre-7.9
 # FUSE_GETATTR: ""
   FUSE_GETATTR: fuse_getattr_in 
-  FUSE_GETLK: fuse_lk_in_out
+  FUSE_GETLK: fuse_lk_in
   FUSE_GETXATTR: fuse_getxattr_in char
   FUSE_IOCTL: fuse_ioctl_in char
   FUSE_INIT: fuse_init_in
@@ -67,7 +67,7 @@
   FUSE_READLINK: char
   FUSE_RELEASE: ""
   FUSE_RELEASEDIR: ""
-  FUSE_REMOVEXATTR:
+  FUSE_REMOVEXATTR: ""
   FUSE_RENAME: ""
   FUSE_RMDIR: ""
   FUSE_SETATTR: fuse_attr_out
