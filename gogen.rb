@@ -101,8 +101,7 @@ func #{fnam}(opcode uint32, data []byte) (a []interface{}) {
 GOBLOCK
       mmap.each do |c,d|
         d or next
-        d == "" and d = "char"
-        d = d.split.map { |t| typemap t }
+        d = d.map { |t| typemap t }
         d[0...-1].include? "*byte" and raise "*byte type must be trailing"
         out <<
 <<GOBLOCK

@@ -240,7 +240,7 @@ class FuseMsg
 
     def initialize buf, msg
       super
-      @tree = Msgnode.new.populate @buf, Msgmap[cvar :@direction][cvar :@op].split
+      @tree = Msgnode.new.populate @buf, Msgmap[cvar :@direction][cvar :@op]
     end
 
     attr_reader :tree
@@ -260,7 +260,7 @@ class FuseMsg
 
 #  Not needed if we make use of "Z*" unpacker
 #
-#  MsgRenameR = generate_bodyclass :R , 'FUSE_RENAME'
+#  MsgRenameR = generate_bodyclass 'R' , 'FUSE_RENAME'
 #  MsgRenameR.class_eval {
 #
 #    def initialize *a
@@ -271,7 +271,7 @@ class FuseMsg
 #
 #  }
 
-  MsgGetxattrW = generate_bodyclass :W, 'FUSE_GETXATTR'
+  MsgGetxattrW = generate_bodyclass 'W', 'FUSE_GETXATTR'
   MsgGetxattrW.class_eval {
 
     def initialize *a
@@ -285,8 +285,8 @@ class FuseMsg
 
   MsgListxattrW = MsgGetxattrW.dup
 
-  MsgBodies.merge! [:W, 'FUSE_GETXATTR'] => MsgGetxattrW,
-                   [:W, 'FUSE_LISTXATTR'] => MsgListxattrW
+  MsgBodies.merge! ['W', 'FUSE_GETXATTR'] => MsgGetxattrW,
+                   ['W', 'FUSE_LISTXATTR'] => MsgListxattrW
 
   def self.sizeof tnam
     @hcac ||= {}
@@ -312,7 +312,7 @@ class FuseMsg
       when 'R'
         in_head, hsiz = head_get[:fuse_in_header]
         in_head.tag = Messages[in_head.opcode] || "??"
-        mbcls = MsgBodies[[:R, Messages[in_head.opcode]]]
+        mbcls = MsgBodies[['R', Messages[in_head.opcode]]]
         mbcls ||= MsgBodyCore
         msg = new
         msg.in_head = in_head
@@ -323,7 +323,7 @@ class FuseMsg
         out_head, hsiz = head_get[:fuse_out_header]
         msg = q.delete(out_head.unique) || new
         msg.out_head = out_head
-        mbcls = msg.in_head ? MsgBodies[[:W, Messages[msg.in_head.opcode]]] : MsgBodyCore
+        mbcls = msg.in_head ? MsgBodies[['W', Messages[msg.in_head.opcode]]] : MsgBodyCore
         mbcls ||= MsgBodyCore
         msg.out_body = mbcls.new data.read(out_head.len - hsiz), msg
         [out_head, msg.out_body]
