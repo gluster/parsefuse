@@ -14,9 +14,19 @@ package parsefuse
 
 import (
 	"fmt"
+	"log"
 	"unsafe"
 )
 
+func clen(n []byte) int {
+	for i := 0; i < len(n); i++ {
+		if n[i] == 0 {
+			return i
+		}
+	}
+	log.Fatal("terminating zero not found in C string")
+	return -1
+}
 GOBLOCK
     end
 
@@ -61,6 +71,8 @@ GOBLOCK
         "int#{$1}"
       when "char"
         "*byte"
+      when "string"
+        "string"
       else
         raise "unknown C type #{tnam}"
       end
@@ -90,7 +102,6 @@ func #{fnam}(opcode uint32, data []byte) (a []interface{}) {
 GOBLOCK
       mmap.each do |c,d|
         d or next
-        d = d.sub(/(string\s+)?string/, "char")
         d == "" and d = "char"
         d = d.split.map { |t| typemap t }
         d[0...-1].include? "*byte" and raise "*byte type must be trailing"
@@ -98,11 +109,18 @@ GOBLOCK
 <<GOBLOCK
         case #{opcodemap c}:
 GOBLOCK
+        strings = 0
         d.each_with_index do |t,i|
           out << case t
           when "*byte"
 <<GOBLOCK
 		a = append(a, data[pos:])
+GOBLOCK
+          when "string"
+<<GOBLOCK
+		l #{(strings += 1) == 1 ? ":" : ""}= clen(data[pos:])
+		a = append(a, string(data[pos:][:l]))
+		pos += l + 1
 GOBLOCK
           else
 <<GOBLOCK
