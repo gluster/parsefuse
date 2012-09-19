@@ -184,7 +184,14 @@ func main() {
 			if !read(fi, dbuf) {
 				shortread()
 			}
-			formatter(*lim, parsefuse.FuseOpnames[inh.Opcode], *inh,
+			opname := ""
+			if int(inh.Opcode) < len(parsefuse.FuseOpnames) {
+				opname = parsefuse.FuseOpnames[inh.Opcode]
+			}
+			if opname == "" {
+				opname = fmt.Sprintf("OP#%d", inh.Opcode)
+			}
+			formatter(*lim, opname, *inh,
 				parsefuse.HandleR(inh.Opcode, dbuf))
 			if inh.Opcode != parsefuse.FORGET {
 				umap[inh.Unique] = inh.Opcode

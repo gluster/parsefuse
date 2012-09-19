@@ -13,7 +13,6 @@ class FuseMsg
 package parsefuse
 
 import (
-	"fmt"
 	"log"
 	"unsafe"
 )
@@ -139,7 +138,12 @@ GOBLOCK
       out <<
 <<GOBLOCK
 	default:
-		panic(fmt.Sprintf("unknown opcode %d", opcode))
+		if FuseOpnames[opcode] == "" {
+			log.Printf("warning: unknown opcode %d", opcode)
+		} else {
+			log.Printf("warning: format spec missing for %s", FuseOpnames[opcode])
+		}
+		a = append(a, data)
 	}
 	return
 }
