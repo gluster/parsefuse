@@ -12,7 +12,7 @@ import (
 	"unsafe"
 )
 
-import "parsefuse"
+import "parsefuse/protogen"
 
 func formatFmt_i(w *os.File, lim int, a ...interface{}) {
 	var err error
@@ -97,14 +97,14 @@ func read(f *os.File, buf []byte) bool {
 	return true
 }
 
-const direntSize = int(unsafe.Sizeof(parsefuse.Dirent{}))
+const direntSize = int(unsafe.Sizeof(protogen.Dirent{}))
 
 func parsedir(data []byte) ([][]interface{}, []byte) {
 	dea := make([][]interface{}, 0, len(data)/(direntSize+10))
 
 	for len(data) >= direntSize {
 		dex := make([]interface{}, 2)
-		de := *(*parsefuse.Dirent)(unsafe.Pointer(&data[0]))
+		de := *(*protogen.Dirent)(unsafe.Pointer(&data[0]))
 		dex[0] = de
 		nlen := int(de.Namelen)
 		recordsize := direntSize + nlen + ((8 - nlen&7) & 7)
@@ -127,8 +127,8 @@ options:
 `
 
 func main() {
-	insize := int(unsafe.Sizeof(parsefuse.InHeader{}))
-	outsize := int(unsafe.Sizeof(parsefuse.OutHeader{}))
+	insize := int(unsafe.Sizeof(protogen.InHeader{}))
+	outsize := int(unsafe.Sizeof(protogen.OutHeader{}))
 	if insize <= outsize {
 		panic("header size assertion fails")
 	}
@@ -199,7 +199,7 @@ func main() {
 			if !read(fi, hbuf[1+outsize:]) {
 				shortread()
 			}
-			inh := (*parsefuse.InHeader)(unsafe.Pointer(&hbuf[1]))
+			inh := (*protogen.InHeader)(unsafe.Pointer(&hbuf[1]))
 			dlen := int(inh.Len) - insize
 			if cap(dbuf) < dlen {
 				dbuf = make([]byte, dlen)
@@ -209,31 +209,31 @@ func main() {
 				shortread()
 			}
 			opname := ""
-			if int(inh.Opcode) < len(parsefuse.FuseOpnames) {
-				opname = parsefuse.FuseOpnames[inh.Opcode]
+			if int(inh.Opcode) < len(protogen.FuseOpnames) {
+				opname = protogen.FuseOpnames[inh.Opcode]
 			}
 			if opname == "" {
 				opname = fmt.Sprintf("OP#%d", inh.Opcode)
 			}
-			body = parsefuse.HandleR(inh.Opcode, dbuf)
+			body = protogen.ParseR(inh.Opcode, dbuf)
 			formatter(*lim, opname, *inh, body)
 			// special handling for some ops
 			switch inh.Opcode {
-			case parsefuse.LISTXATTR, parsefuse.GETXATTR:
+			case protogen.LISTXATTR, protogen.GETXATTR:
 				// for 0 sized query answer will be GetxattrOut,
 				// otherwise blob; former case marked with negative sign
-				if body[0].(parsefuse.GetxattrIn).Size == 0 {
+				if body[0].(protogen.GetxattrIn).Size == 0 {
 					umap[inh.Unique] = -int(inh.Opcode)
 				} else {
 					umap[inh.Unique] = int(inh.Opcode)
 				}
-			case parsefuse.FORGET:
+			case protogen.FORGET:
 				// forget FORGET, as it entails no response
 			default:
 				umap[inh.Unique] = int(inh.Opcode)
 			}
 		case 'W':
-			ouh := (*parsefuse.OutHeader)(unsafe.Pointer(&hbuf[1]))
+			ouh := (*protogen.OutHeader)(unsafe.Pointer(&hbuf[1]))
 			dlen := int(ouh.Len) - outsize
 			if cap(dbuf) < dlen {
 				dbuf = make([]byte, dlen)
@@ -245,9 +245,9 @@ func main() {
 			if opcode, ok := umap[ouh.Unique]; ok {
 				delete(umap, ouh.Unique)
 				if opcode < 0 {
-					if len(dbuf) == int(unsafe.Sizeof(parsefuse.GetxattrOut{})) {
+					if len(dbuf) == int(unsafe.Sizeof(protogen.GetxattrOut{})) {
 						body = []interface{}{
-							*(*parsefuse.GetxattrOut)(unsafe.Pointer(&dbuf[0])),
+							*(*protogen.GetxattrOut)(unsafe.Pointer(&dbuf[0])),
 						}
 					} else {
 						opcode *= -1
@@ -255,7 +255,7 @@ func main() {
 				}
 				if opcode >= 0 {
 					switch uint32(opcode) {
-					case parsefuse.READDIR:
+					case protogen.READDIR:
 						body = make([]interface{}, 0, 1)
 						dea, data := parsedir(dbuf)
 						if len(dea) > 0 {
@@ -264,11 +264,11 @@ func main() {
 						if len(data) > 0 {
 							body = append(body, data)
 						}
-					case parsefuse.LISTXATTR:
+					case protogen.LISTXATTR:
 						nama := strings.Split(string(dbuf), "\x00")
 						body = []interface{}{nama[:len(nama)-1]}
 					default:
-						body = parsefuse.HandleW(uint32(opcode), dbuf)
+						body = protogen.ParseW(uint32(opcode), dbuf)
 					}
 				}
 				formatter(*lim, *ouh, body)

@@ -10,7 +10,7 @@ class FuseMsg
     def makehead out
       out <<
 <<GOBLOCK
-package parsefuse
+package protogen
 
 import (
 	"log"
@@ -91,7 +91,7 @@ GOBLOCK
       }
     end
 
-    def makehandler fnam, mmap, out
+    def makeparser fnam, mmap, out
       out <<
 <<GOBLOCK
 func #{fnam}(opcode uint32, data []byte) (a []interface{}) {
@@ -148,9 +148,9 @@ GOBLOCK
 GOBLOCK
     end
 
-    def makehandlers out
+    def makeparsers out
       Msgmap.each { |c, m|
-         makehandler "Handle#{c}", m, out
+         makeparser "Parse#{c}", m, out
       }
     end
 
@@ -158,7 +158,7 @@ GOBLOCK
       makehead out
       makeopcodes out
       makestructs out
-      makehandlers out
+      makeparsers out
     end
 
   end

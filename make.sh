@@ -2,10 +2,10 @@
 
 cd "`dirname $0`"
 export GOPATH="$PWD/go"
-parsefusedir="$GOPATH/src/parsefuse"
+protogendir="$GOPATH/src/parsefuse/protogen"
 
-mkdir -p "$parsefusedir"
+mkdir -p "$protogendir"
 
-ruby -I. gogen.rb $* | gofmt > "$parsefusedir/parsefuse.go"
+ruby -I. gogen.rb $* | gofmt > "$protogendir/protogen.go"
 
-go install pfu
+go install parsefuse
