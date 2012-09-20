@@ -6,6 +6,6 @@ protogendir="$GOPATH/src/parsefuse/protogen"
 
 mkdir -p "$protogendir"
 
-ruby -I. gogen.rb $* | gofmt > "$protogendir/protogen.go"
+ruby -I. gauguin.rb $* | gofmt > "$protogendir/protogen.go"
 
 go install parsefuse
