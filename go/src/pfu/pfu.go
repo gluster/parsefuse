@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"unsafe"
 )
 
@@ -232,7 +233,12 @@ func main() {
 					}
 				}
 				if opcode >= 0 {
-					body = parsefuse.HandleW(uint32(opcode), dbuf)
+					if uint32(opcode) == parsefuse.LISTXATTR {
+						nama := strings.Split(string(dbuf), "\x00")
+						body = []interface{}{nama[:len(nama)-1]}
+					} else {
+						body = parsefuse.HandleW(uint32(opcode), dbuf)
+					}
 				}
 				formatter(*lim, *ouh, body)
 			} else {

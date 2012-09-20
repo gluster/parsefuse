@@ -105,8 +105,9 @@ class FuseMsg
   ###### ORM layer #######
   ###### (t3h metaprogramming v00d00)
 
-  def self.generate_bodyclass dir, op
-    Class.new(MsgBodyGeneric).class_eval {
+  def self.generate_bodyclass dir, op, cls = MsgBodyGeneric
+    cls <= MsgBodyGeneric or raise "bodyclass is to be generated from MsgBodyGeneric"
+    Class.new(cls).class_eval {
       @direction = dir
       @op = op
       extend MsgClassBaptize
@@ -278,12 +279,24 @@ class FuseMsg
       super
       if (mb = @msg.in_body) and mb[0][1][:size].zero?
         @tree = MsgBodyGeneric::Msgnode.new.populate @buf, ["fuse_getxattr_out"]
+        @treeadjusted = true
       end
     end
 
   }
 
-  MsgListxattrW = MsgGetxattrW.dup
+  MsgListxattrW = generate_bodyclass 'W', 'FUSE_LISTXATTR', MsgGetxattrW
+  MsgListxattrW.class_eval {
+
+    def initialize *a
+      super
+      unless @treeadjusted
+        @tree = MsgBodyGeneric::Msgnode.new
+        @buf.split("\0").each { |nam| @tree << nam }
+      end
+    end
+
+  }
 
   MsgBodies.merge! ['W', 'FUSE_GETXATTR'] => MsgGetxattrW,
                    ['W', 'FUSE_LISTXATTR'] => MsgListxattrW
