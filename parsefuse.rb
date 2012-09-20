@@ -51,7 +51,7 @@ class FuseMsg
       et.members.each { |m|
         Ctypes[en][et.name] << case en
         when :Struct
-          [m.type.send(m.type.respond_to?(:name) ? :name : :to_s),
+          [m.type.send(m.type.respond_to?(:name) ? :name : :to_s) || m.type.to_s,
            m.declarators.first.name]
         when :Enum
           [m.name, m.val ? m.val.val : m.val]
