@@ -23,10 +23,12 @@ func formatFmt_i(w *os.File, lim int, a ...interface{}) {
 		case []interface{}:
 			formatFmt_i(w, lim, t...)
 		case []byte:
+			tail := ""
 			if len(t) > lim && lim > 0 {
+				tail = fmt.Sprintf("... %d", len(t))
 				t = t[:lim]
 			}
-			_, err = fmt.Fprintf(w, "%q ", t)
+			_, err = fmt.Fprintf(w, "%q%s ", t, tail)
 		default:
 			_, err = fmt.Fprintf(w, "%+v ", t)
 		}
