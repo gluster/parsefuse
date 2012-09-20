@@ -104,11 +104,8 @@ options:
 `
 
 func main() {
-	var inh *parsefuse.InHeader
-	var ouh *parsefuse.OutHeader
-
-	insize := int(unsafe.Sizeof(*inh))
-	outsize := int(unsafe.Sizeof(*ouh))
+	insize := int(unsafe.Sizeof(parsefuse.InHeader{}))
+	outsize := int(unsafe.Sizeof(parsefuse.OutHeader{}))
 	if insize <= outsize {
 		panic("header size assertion fails")
 	}
@@ -179,7 +176,7 @@ func main() {
 			if !read(fi, hbuf[1+outsize:]) {
 				shortread()
 			}
-			inh = (*parsefuse.InHeader)(unsafe.Pointer(&hbuf[1]))
+			inh := (*parsefuse.InHeader)(unsafe.Pointer(&hbuf[1]))
 			dlen := int(inh.Len) - insize
 			if cap(dbuf) < dlen {
 				dbuf = make([]byte, dlen)
@@ -213,7 +210,7 @@ func main() {
 				umap[inh.Unique] = int(inh.Opcode)
 			}
 		case 'W':
-			ouh = (*parsefuse.OutHeader)(unsafe.Pointer(&hbuf[1]))
+			ouh := (*parsefuse.OutHeader)(unsafe.Pointer(&hbuf[1]))
 			dlen := int(ouh.Len) - outsize
 			if cap(dbuf) < dlen {
 				dbuf = make([]byte, dlen)
@@ -224,9 +221,8 @@ func main() {
 			}
 			if opcode, ok := umap[ouh.Unique]; ok {
 				delete(umap, ouh.Unique)
-				var gxo *parsefuse.GetxattrOut
 				if opcode < 0 {
-					if len(dbuf) == int(unsafe.Sizeof(*gxo)) {
+					if len(dbuf) == int(unsafe.Sizeof(parsefuse.GetxattrOut{})) {
 						body = []interface{}{
 							*(*parsefuse.GetxattrOut)(unsafe.Pointer(&dbuf[0])),
 						}

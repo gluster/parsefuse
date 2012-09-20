@@ -108,7 +108,7 @@ GOBLOCK
         case #{opcodemap c}:
 GOBLOCK
         strings = 0
-        d.each_with_index do |t,i|
+        d.each do |t|
           out << case t
           when "*byte"
 <<GOBLOCK
@@ -122,11 +122,9 @@ GOBLOCK
 GOBLOCK
           else
 <<GOBLOCK
-		var q#{i} *#{t}
-		if len(data[pos:]) >= int(unsafe.Sizeof(*q#{i})) {
-			q#{i} := (*#{t})(unsafe.Pointer(&data[pos]))
-			a = append(a, *q#{i})
-			pos += int(unsafe.Sizeof(*q#{i}))
+		if len(data[pos:]) >= int(unsafe.Sizeof(#{t}{})) {
+			a = append(a, *(*#{t})(unsafe.Pointer(&data[pos])))
+			pos += int(unsafe.Sizeof(#{t}{}))
 		} else {
 				a = append(a, data[pos:])
 		}
