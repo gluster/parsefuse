@@ -319,6 +319,7 @@ class FuseMsg
       h = MsgBodyGeneric::Msgnode.new(t).populate data.read(hsiz), Ctypes[:Struct][ts]
       [h, hsiz]
     }
+    _FORGET = FuseMsg::Messages.invert["FUSE_FORGET"]
     loop do
       dir = data.read 1
       yield case dir
@@ -330,7 +331,7 @@ class FuseMsg
         msg = new
         msg.in_head = in_head
         msg.in_body = mbcls.new data.read(in_head.len - hsiz), msg
-        q[in_head.unique] = msg
+        q[in_head.unique] = msg unless in_head.opcode == _FORGET
         [in_head, msg.in_body]
       when 'W'
         out_head, hsiz = head_get[:fuse_out_header]
