@@ -97,6 +97,29 @@ func read(f *os.File, buf []byte) bool {
 	return true
 }
 
+const direntSize = int(unsafe.Sizeof(parsefuse.Dirent{}))
+
+func parsedir(data []byte) ([][]interface{}, []byte) {
+	dea := make([][]interface{}, 0, len(data)/(direntSize+10))
+
+	for len(data) >= direntSize {
+		dex := make([]interface{}, 2)
+		de := *(*parsefuse.Dirent)(unsafe.Pointer(&data[0]))
+		dex[0] = de
+		nlen := int(de.Namelen)
+		recordsize := direntSize + nlen + ((8 - nlen&7) & 7)
+		if len(data) < recordsize {
+			// cannot parse
+			break
+		}
+		dex[1] = string(data[direntSize:][:nlen])
+		dea = append(dea, dex)
+		data = data[recordsize:]
+	}
+
+	return dea, data
+}
+
 const usage = `fusedump disector
 
 %s [options] [<fusedump>]
@@ -231,10 +254,20 @@ func main() {
 					}
 				}
 				if opcode >= 0 {
-					if uint32(opcode) == parsefuse.LISTXATTR {
+					switch uint32(opcode) {
+					case parsefuse.READDIR:
+						body = make([]interface{}, 0, 1)
+						dea, data := parsedir(dbuf)
+						if len(dea) > 0 {
+							body = append(body, dea)
+						}
+						if len(data) > 0 {
+							body = append(body, data)
+						}
+					case parsefuse.LISTXATTR:
 						nama := strings.Split(string(dbuf), "\x00")
 						body = []interface{}{nama[:len(nama)-1]}
-					} else {
+					default:
 						body = parsefuse.HandleW(uint32(opcode), dbuf)
 					}
 				}

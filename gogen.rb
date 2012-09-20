@@ -69,7 +69,7 @@ GOBLOCK
       when /^__s(\d+)$/
         "int#{$1}"
       when "char"
-        "*byte"
+        "[0]byte"
       when "string"
         "string"
       else
@@ -102,7 +102,7 @@ GOBLOCK
       mmap.each do |c,d|
         d or next
         d = d.map { |t| typemap t }
-        d[0...-1].include? "*byte" and raise "*byte type must be trailing"
+        d[0...-1].include? "[0]byte" and raise "[0]byte type must be trailing"
         out <<
 <<GOBLOCK
         case #{opcodemap c}:
@@ -110,7 +110,7 @@ GOBLOCK
         strings = 0
         d.each do |t|
           out << case t
-          when "*byte"
+          when "[0]byte"
 <<GOBLOCK
 		a = append(a, data[pos:])
 GOBLOCK
