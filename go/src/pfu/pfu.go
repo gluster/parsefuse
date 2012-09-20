@@ -164,7 +164,8 @@ func main() {
 	hbuf := make([]byte, 1+insize)
 	dbuf := make([]byte, 0, 4096)
 
-	umap := make(map[uint64]uint32)
+	umap := make(map[uint64]int)
+	var body []interface{}
 
 	for {
 		if !read(fi, hbuf[:1+outsize]) {
@@ -191,10 +192,22 @@ func main() {
 			if opname == "" {
 				opname = fmt.Sprintf("OP#%d", inh.Opcode)
 			}
-			formatter(*lim, opname, *inh,
-				parsefuse.HandleR(inh.Opcode, dbuf))
-			if inh.Opcode != parsefuse.FORGET {
-				umap[inh.Unique] = inh.Opcode
+			body = parsefuse.HandleR(inh.Opcode, dbuf)
+			formatter(*lim, opname, *inh, body)
+			// special handling for some ops
+			switch inh.Opcode {
+			case parsefuse.LISTXATTR, parsefuse.GETXATTR:
+				// for 0 sized query answer will be GetxattrOut,
+				// otherwise blob; former case marked with negative sign
+				if body[0].(parsefuse.GetxattrIn).Size == 0 {
+					umap[inh.Unique] = -int(inh.Opcode)
+				} else {
+					umap[inh.Unique] = int(inh.Opcode)
+				}
+			case parsefuse.FORGET:
+				// forget FORGET, as it entails no response
+			default:
+				umap[inh.Unique] = int(inh.Opcode)
 			}
 		case 'W':
 			ouh = (*parsefuse.OutHeader)(unsafe.Pointer(&hbuf[1]))
@@ -208,8 +221,20 @@ func main() {
 			}
 			if opcode, ok := umap[ouh.Unique]; ok {
 				delete(umap, ouh.Unique)
-				formatter(*lim, *ouh,
-					parsefuse.HandleW(opcode, dbuf))
+				var gxo *parsefuse.GetxattrOut
+				if opcode < 0 {
+					if len(dbuf) == int(unsafe.Sizeof(*gxo)) {
+						body = []interface{}{
+							*(*parsefuse.GetxattrOut)(unsafe.Pointer(&dbuf[0])),
+						}
+					} else {
+						opcode *= -1
+					}
+				}
+				if opcode >= 0 {
+					body = parsefuse.HandleW(uint32(opcode), dbuf)
+				}
+				formatter(*lim, *ouh, body)
 			} else {
 				formatter(*lim, *ouh, dbuf)
 			}
