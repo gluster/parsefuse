@@ -12,6 +12,8 @@ class FuseMsg
 
   ### Model ###
 
+  FuseVersion = []
+
   Ctypes = {}
   Msgmap = {}
   Zipcodes = {
@@ -34,7 +36,10 @@ class FuseMsg
     skip = false
     ca = []
     open(ch).each {|l|
-      l =~ /^\s*#/ and skip = true
+      if l =~ /^\s*#/
+        skip = true
+        l =~ /VERSION.*\s(\d+)$/ and FuseVersion << Integer($1)
+      end
       skip or ca << l
       if skip
         skip = (l =~ /\\$/) ? true : false

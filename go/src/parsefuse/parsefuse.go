@@ -121,6 +121,7 @@ func parsedir(data []byte) ([][]interface{}, []byte) {
 }
 
 const usage = `fusedump disector
+FUSE version: %d.%d
 
 %s [options] [<fusedump>]
 options:
@@ -134,7 +135,8 @@ func main() {
 	}
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, usage, filepath.Base(os.Args[0]))
+		fmt.Fprintf(os.Stderr, usage, protogen.FuseMajor, protogen.FuseMinor,
+			filepath.Base(os.Args[0]))
 		flag.PrintDefaults()
 	}
 	lim := flag.Int("lim", 512, "truncate output data to this size")

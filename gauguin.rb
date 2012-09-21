@@ -26,6 +26,15 @@ func clen(n []byte) int {
 	log.Fatal("terminating zero not found in C string")
 	return -1
 }
+
+GOBLOCK
+     FuseVersion.size == 2 and out <<
+<<GOBLOCK
+const(
+	FuseMajor = #{FuseVersion[0]}
+	FuseMinor = #{FuseVersion[1]}
+)
+
 GOBLOCK
     end
 
