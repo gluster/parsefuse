@@ -29,16 +29,12 @@ func clen(n []byte) int {
 GOBLOCK
     end
 
-    def opcodemap cn
-      cn.sub(/^FUSE_/, "")
-    end
-
     def makeopcodes out
       out << "const(\n"
       Ctypes[:Enum].each { |e,a|
         a.each { |n,v|
           v or next
-          out << "\t#{opcodemap n} uint32 = #{v}\n"
+          out << "\t#{FuseMsg.opcodemap n} uint32 = #{v}\n"
         }
       }
       out << ")\n\n"
@@ -48,7 +44,7 @@ GOBLOCK
       Ctypes[:Enum].each { |e,a|
         a.each { |n,v|
           used.include? v and next
-          n = opcodemap n
+          n = FuseMsg.opcodemap n
           out << %Q(\t#{n}: "#{n}",\n)
           used << v
         }
@@ -56,14 +52,10 @@ GOBLOCK
       out << "}\n\n"
     end
 
-    def camelize nam
-      nam.split("_").map { |x| x.capitalize }.join
-    end
-
     def typemap tnam
       case tnam
       when /^fuse_(.*)|(^cuse.*)/
-        camelize($1||$2)
+        FuseMsg.camelize($1||$2)
       when /^__u(\d+)$/
         "uint#{$1}"
       when /^__s(\d+)$/
@@ -80,7 +72,7 @@ GOBLOCK
     def makestruct name, desc, out
       out << "type #{typemap name} struct {\n"
       desc.each { |f,v|
-        out << "\t#{camelize v} #{typemap f}\n"
+        out << "\t#{FuseMsg.camelize v} #{typemap f}\n"
       }
       out << "}\n\n"
     end
@@ -105,7 +97,7 @@ GOBLOCK
         d[0...-1].include? "[0]byte" and raise "[0]byte type must be trailing"
         out <<
 <<GOBLOCK
-        case #{opcodemap c}:
+        case #{FuseMsg.opcodemap c}:
 GOBLOCK
         strings = 0
         d.each do |t|

@@ -82,4 +82,12 @@ class FuseMsg
     nil
   end
 
+  def self.opcodemap cn
+    cn.sub(/^FUSE_/, "")
+  end
+
+  def self.camelize nam
+    nam.split("_").map { |x| x.capitalize }.join
+  end
+
 end

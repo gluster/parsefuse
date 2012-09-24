@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 
-require 'stringio'
+require 'ffi'
 require 'parsefuse'
 
 class Object
@@ -11,259 +11,325 @@ class Object
 
 end
 
-class String
-
-  def sinsp
-    inspect.gsub(/\\x00|\\0+/, '\\\\0').gsub(/\\x0/, '\x')
-  end
-
-end
-
 class FuseMsg
 
   ###### ORM layer #######
   ###### (t3h metaprogramming v00d00)
 
-  def self.generate_bodyclass dir, op, cls = MsgBodyGeneric
-    cls <= MsgBodyGeneric or raise "bodyclass is to be generated from MsgBodyGeneric"
-    Class.new(cls).class_eval {
-      @direction = dir
-      @op = op
-      extend MsgClassBaptize
-      self
-    }
+  class FuseFFI < FFI::Struct
+
+    def inspect
+      %w[< >].join(
+        members.zip(values).map { |k,v|
+         "#{k}: #{FuseFFI === v ? v.inspect : v}"
+        }.join " "
+      )
+    end
+
   end
 
-  def self.generate_bodyclasses
-    Msgmap.each { |dir, ddesc|
-      ddesc.each_key { |on|
-        MsgBodies[[dir, on]] ||= generate_bodyclass dir, on
+  MsgmapFFI = []
+  R = 0
+  W = 1
+
+  def self.make_ffi
+    structsffi = {}
+    osiz = 0
+    loop do
+      # loop the struct definer
+      # routine to get interdependent
+      # types eventually resolved
+      Ctypes[:Struct].each { |k,v|
+        structsffi[k] and next
+        la = v.map { |t,f|
+          [f.to_sym,
+           case t
+           when /^__[us]/
+             t.sub(/^__u/, "uint").sub(/^__s/, "int").to_sym
+           when "char"
+             [:char, 0]
+           when /^[cf]use_/
+             structsffi[t]
+           end]
+        }.flatten
+        la.include? nil and next
+        structsffi[k] = Class.new(FuseFFI).class_eval {
+          layout *la.flatten
+          self
+        }
+        const_set camelize(k), structsffi[k]
       }
+      structsffi.size > osiz ? osiz = structsffi.size : break
+    end
+    structsffi.size == Ctypes[:Struct].size or raise "there are unresolvable types for FFI"
+    Messages.each { |k,v| const_set opcodemap(v), k }
+    FuseInHeader.size > FuseOutHeader.size or raise "head size assertion failed"
+
+    Msgmap.each { |d,h|
+      a = []
+      h.each { |m, b|
+        b or next
+        a[const_get opcodemap(m)] = b.map { |t| structsffi[t] || t }
+      }
+      MsgmapFFI[const_get d] = a
     }
   end
 
   ### Controller ###
   ###### (#inspect-s belong to View, though...)
 
-  module MsgClassBaptize
+  class MsgPayload
 
-    def inspect
-      "#{@op}_#{@direction}"
-    end
-
-  end
-
-  class MsgBodyCore
-
-    def initialize buf, msg
+    def initialize buf, layout, msg=nil
       @buf = buf
+      @layout = layout
       @msg = msg
-    end
-
-    attr_reader :buf, :msg
-
-    def self.inspect_buf buf, limit
-      limit ||= PrintLimit
-      limit.zero? && limit = buf.size
-      buf.size <= limit ? buf.sinsp : buf[0...limit].sinsp + " ... [#{buf.size} bytes]"
-    end
-
-    def inspect limit = nil
-      self.class.inspect_buf @buf, limit
-    end
-
-  end
-
-  class MsgBodyGeneric < MsgBodyCore
-
-    class Msgnode < Array
-
-      def initialize tag = nil
-        @tag = tag
+      unless layout
+        msg and STDERR.puts "warning: no layout for #{Messages[msg.in_head.opcode]}"
+        layout = %w[char]
       end
-
-      def << elem, key = nil
-        super [key, elem]
-      end
-
-      attr_accessor :tag
-
-      def walk &b
-        each { |kv|
-          case kv[1]
-          when Msgnode
-            kv[1].walk &b
+      pos = 0
+      slice = proc { @buf.slice pos, @buf.size-pos }
+      drained = false
+      blob = proc {
+        drained = true
+        slice[]
+      }
+      @tree = []
+      layout.each { |t|
+        break if drained
+        @tree << if t.is_a? Class and t < FuseFFI
+          if pos + t.size > @buf.size
+            blob[]
           else
-            b[kv]
+            s = t.new slice[]
+            pos += t.size
+            s
           end
-        }
-      end
-
-      def deploy
-        walk { |kv|
-          tnam = kv[1]
-          sr = Ctypes[:Struct][tnam]
-          next unless sr
-          sm = Msgnode.new tnam
-          sr.each { |typ, fld| sm.<< typ, fld }
-          kv[1] = sm.deploy
-        }
-        self
-      end
-
-      def [] idx
-        case idx
-        when Symbol
-          idx = idx.to_s
-          each { |k, v| k == idx and return v }
-          nil
         else
-          super
-        end
-      end
-
-      def inspect limit = nil
-        "#{@tag.to_s.sub(/^fuse_/i, "")}<%s>" % map { |k,v|
-          v or next
-          "#{k}#{k ? ": " : ""}%s" % case v
-          when Msgnode
-            v.inspect limit
-          when String
-            MsgBodyCore.inspect_buf v, limit
+          case t
+          when "string"
+            s = slice[].get_string 0
+            pos += s.size + 1
+            s
+          when "char"
+            blob[]
           else
-            v.inspect
+            raise "unhandled layout directive #{t}"
           end
-        }.compact.join(" ")
-      end
-
-      def method_missing m, *a
-        v = self[m]
-        unless v
-          raise NoMethodError, "undefined method `#{m}' for #{self.class}"
         end
-        unless a.empty?
-          raise ArgumentError, "wrong number of arguments (#{a.size} for 0)"
-        end
-        v
-      end
-
-      def populate buf, dtyp
-        dtyp.each { |t| self.<< *t }
-        deploy
-        leaftypes = []
-        walk { |kv| leaftypes << kv[1] }
-        leafvalues = buf.unpack leaftypes.map { |t| Zipcodes[t] }.join
-        walk { |kv| kv[1] = leafvalues.shift }
-      end
-
+      }
     end
 
-    def initialize buf, msg
-      super
-      @tree = Msgnode.new.populate @buf, Msgmap[cvar :@direction][cvar :@op]
-    end
+    attr_reader :tree, :buf
+    attr_accessor :msg
 
-    attr_reader :tree
+    def [] i
+      @tree[i]
+    end
 
     def inspect limit = nil
-      @tree.inspect limit
+      @tree.empty? and return "<>"
+      s = ""
+      @tree.each_with_index { |e,i|
+        s << case e
+        when FuseFFI, String
+          e.inspect
+        when FFI::Buffer
+          limit ||= PrintLimit
+          limit.zero? && limit = e.size
+          e.size <= limit ? e.get_bytes(0, e.size).inspect : e.get_bytes(0, limit).inspect + " ... [#{e.size} bytes]"
+        else
+          raise TypeError, "unknown tree elem type #{e.class}"
+        end
+        i == @tree.size-1 or s << " "
+      }
+      s
+    end
+
+    def copy
+      buf = FFI::Buffer.new @buf.size
+      buf.put_bytes 0, @buf.get_bytes(0, buf.size)
+      self.class.new buf, @layout, @msg
     end
 
     def method_missing *a, &b
-      if @tree
-        return @tree.send *a, &b
+      if b or a.size != 1
+        raise NoMethodError, "undefined method `#{a[0]}' for #{self.class}"
       end
-      raise NoMethodError, "undefined method `#{a[0]}' for #{self.class}"
+      @tree[0][a[0]]
     end
 
   end
 
-#  Not needed if we make use of "Z*" unpacker
-#
-#  MsgRenameR = generate_bodyclass 'R' , 'FUSE_RENAME'
-#  MsgRenameR.class_eval {
-#
-#    def initialize *a
-#      super
-#      k, nam = @tree.pop
-#      nam.split(/\0/).each { |n| @tree << n }
-#    end
-#
-#  }
+  class FuseInHeaderPayload < MsgPayload
 
-  MsgGetxattrW = generate_bodyclass 'W', 'FUSE_GETXATTR'
-  MsgGetxattrW.class_eval {
-
-    def initialize *a
+    def initialize buf, layout=[FuseInHeader], msg=nil
       super
-      if (mb = @msg.in_body) and mb[0][1][:size].zero?
-        @tree = MsgBodyGeneric::Msgnode.new.populate @buf, ["fuse_getxattr_out"]
-        @treeadjusted = true
+    end
+
+    def inspect *a
+      Messages[opcode].dup << " " << super
+    end
+
+  end
+
+  class FuseReaddirOutPayload < MsgPayload
+
+    def initialize buf, layout, msg=nil
+      super
+      raise "unhandled READDIR response layout" unless layout == %w[char]
+      pos = 0
+      slice = proc { @buf.slice pos, @buf.size-pos }
+      @tree.clear
+      while pos < buf.size
+        if pos + FuseDirent.size > @buf.size
+          @tree << slice[]
+          pos = buf.size
+        else
+          s = FuseDirent.new slice[]
+          @tree << s
+          pos += s.size
+          nlen = s[:namelen]
+          @tree << buf.get_bytes(pos, nlen)
+          pos += nlen + ((8 - nlen&7) & 7)
+        end
       end
     end
 
-  }
+  end
 
-  MsgListxattrW = generate_bodyclass 'W', 'FUSE_LISTXATTR', MsgGetxattrW
-  MsgListxattrW.class_eval {
+  class FuseGetxattrOutPayload < MsgPayload
+
+    def initialize buf, layout, msg=nil
+      if msg and msg.in_body and msg.in_body[0][:size] == 0
+        layout = [FuseGetxattrOut]
+      end
+      super
+    end
+
+  end
+
+  class FuseListxattrOutPayload < FuseGetxattrOutPayload
 
     def initialize *a
       super
-      unless @treeadjusted
-        @tree = MsgBodyGeneric::Msgnode.new
-        @buf.split("\0").each { |nam| @tree << nam }
+      return unless @layout == %w[char]
+      pos = 0
+      @tree.clear
+      while pos < buf.size
+        @tree << @buf.get_string(pos)
+        pos += @tree.last.size + 1
       end
     end
 
-  }
-
-  MsgBodies.merge! ['W', 'FUSE_GETXATTR'] => MsgGetxattrW,
-                   ['W', 'FUSE_LISTXATTR'] => MsgListxattrW
-
-  def self.sizeof tnam
-    @hcac ||= {}
-    @hcac[tnam] ||= Ctypes[:Struct][tnam].transpose[0].instance_eval { tt = self
-      ([0]*tt.size).pack(tt.map {|t| Zipcodes[t] }.join).size
-    }
   end
 
   attr_accessor :in_head, :out_head, :in_body, :out_body
 
-  def self.read_stream data
-    data.respond_to? :read or data = StringIO.new(data)
-    q = {}
-    head_get = proc { |t|
-      ts = t.to_s
-      hsiz = sizeof(ts)
-      h = MsgBodyGeneric::Msgnode.new(t).populate data.read(hsiz), Ctypes[:Struct][ts]
-      [h, hsiz]
+  def opcode
+    @opcode || (@in_head && @in_head.opcode)
+  end
+
+  def save_opcode
+    if @in_head
+      @opcode = @in_head.opcode
+      @in_head = nil
+    end
+  end
+
+  def save *fnams
+    fnams.each { |fnam|
+      fnam = '@' + fnam.to_s
+      f = instance_variable_get fnam
+      f and instance_variable_set fnam, f.copy
     }
-    _FORGET = FuseMsg::Messages.invert["FUSE_FORGET"]
-    loop do
-      dir = data.read 1
-      yield case dir
-      when 'R'
-        in_head, hsiz = head_get[:fuse_in_header]
-        in_head.tag = Messages[in_head.opcode] || "??"
-        mbcls = MsgBodies[['R', Messages[in_head.opcode]]]
-        mbcls ||= MsgBodyCore
-        msg = new
-        msg.in_head = in_head
-        msg.in_body = mbcls.new data.read(in_head.len - hsiz), msg
-        q[in_head.unique] = msg unless in_head.opcode == _FORGET
-        [in_head, msg.in_body]
-      when 'W'
-        out_head, hsiz = head_get[:fuse_out_header]
-        msg = q.delete(out_head.unique) || new
-        msg.out_head = out_head
-        mbcls = msg.in_head ? MsgBodies[['W', Messages[msg.in_head.opcode]]] : MsgBodyCore
-        mbcls ||= MsgBodyCore
-        msg.out_body = mbcls.new data.read(out_head.len - hsiz), msg
-        [out_head, msg.out_body]
-      when nil
-        break
-      else
-        raise FuseMsgError, "bogus direction #{dir.inspect}"
+  end
+
+  module LibcIO
+    extend FFI::Library
+    ffi_lib FFI::Library::LIBC
+    attach_function :read, [ :int, :buffer_out, :size_t ], :int
+  end
+
+  def self.read_stream fd, opts={}
+    preserve = opts[:preserve]
+    fd.respond_to? :fileno and fd = fd.fileno
+    hbuf = FFI::Buffer.new_out FuseInHeader.size + 1
+    bbuf = FFI::Buffer.new_out 4096
+    read = proc { |buf, &shortcbk|
+      pos = 0
+      while pos < buf.size
+        r = LibcIO.read fd, buf.slice(pos, buf.size), buf.size - pos
+        case r
+        when -1
+          raise SystemCallError, FFI::LastError.errno
+        when 0
+          shortcbk[r]
+        else
+          pos += r
+        end
+      end
+    }
+    realloc_body = proc { |h|
+      n = h.len - h[0].size
+      if bbuf.size < n
+        bbuf = FFI::Buffer.new_out n
+      end
+      n
+    }
+    shraise = proc { raise "short read" }
+    bR, bW = %w[R W].map{|d| d.unpack('c')[0] }
+    q = {}
+    inho = FuseOutHeader.size + 1
+    inhts = hbuf.size - inho
+    catch :eof do
+      loop do
+        read.call(hbuf.slice 0, inho) { |n| n.zero? ? throw(:eof) : shraise[] }
+        dir = hbuf.get_uchar 0
+        yield case dir
+        when bR
+          read.call hbuf.slice(inho, inhts), &shraise
+          in_head = FuseInHeaderPayload.new hbuf.slice(1, FuseInHeader.size)
+          b = bbuf.slice 0, realloc_body[in_head]
+          read.call b, &shraise
+          msg = new
+          msg.in_head = in_head
+          in_body = MsgPayload.new b, MsgmapFFI[R][in_head.opcode], msg
+          q[in_head.unique] = msg unless in_head.opcode == FORGET
+          if preserve or [LISTXATTR, GETXATTR].include? in_head.opcode
+            msg.in_body = in_body
+            msg.save :in_head, :in_body
+          else
+            msg.save_opcode
+          end
+          [in_head, in_body]
+        when bW
+          out_head = MsgPayload.new hbuf.slice(1, FuseOutHeader.size), [FuseOutHeader]
+          b = bbuf.slice 0, realloc_body[out_head]
+          read.call b, &shraise
+          msg = q.delete(out_head.unique) || new
+          out_body = case msg.opcode
+          when READDIR
+            FuseReaddirOutPayload
+          when LISTXATTR
+            FuseListxattrOutPayload
+          when GETXATTR
+            FuseGetxattrOutPayload
+          else
+            MsgPayload
+          end.new b, msg.opcode && MsgmapFFI[W][msg.opcode], msg
+          if preserve
+            msg.out_head = out_head
+            msg.out_body = out_body
+            msg.save :out_head, :out_body
+          end
+          [out_head, out_body]
+        when nil
+          break
+        else
+          raise FuseMsgError, "bogus direction #{dir.chr.inspect}"
+        end
       end
     end
   end
@@ -285,9 +351,8 @@ if __FILE__ == $0
     op.on('-m', '--msgdef F') { |v| msgy = v }
   end.parse!
   FuseMsg.import_proto protoh, msgy
-  FuseMsg.generate_bodyclasses
+  FuseMsg.make_ffi
   FuseMsg.read_stream($<) { |m|
     puts m.map{|mp| mp.inspect limit}.join(" ")
   }
 end
-
