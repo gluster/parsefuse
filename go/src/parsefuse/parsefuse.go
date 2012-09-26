@@ -140,7 +140,7 @@ func main() {
 		flag.PrintDefaults()
 	}
 	lim := flag.Int("lim", 512, "truncate output data to this size")
-	format := flag.String("format", "fmt", "output format (fmt or json)")
+	format := flag.String("format", "fmt", "output format (fmt, json or null)")
 	fopath := flag.String("o", "-", "output file")
 	flag.Parse()
 
@@ -180,6 +180,9 @@ func main() {
 		jw := json.NewEncoder(fo)
 		formatter = func(lim int, a ...interface{}) {
 			formatJson(jw, lim, a...)
+		}
+	case "null":
+		formatter = func(lim int, a ...interface{}) {
 		}
 	default:
 		flag.Usage()
