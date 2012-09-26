@@ -9,10 +9,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"unsafe"
 )
 
 import "parsefuse/protogen"
+
+//
+// formatting routines
+//
 
 func formatFmt_i(w *os.File, lim int, a ...interface{}) {
 	var err error
@@ -75,27 +80,129 @@ func formatJson(jw *json.Encoder, lim int, a ...interface{}) {
 	}
 }
 
+//
+// I/O routines
+//
+
+const iobase = 1 << 16
+
+func iosize(f *os.File) int {
+	fin, err := f.Stat()
+	if err != nil {
+		log.Fatal(err)
+	}
+	st := fin.Sys().(*syscall.Stat_t)
+	if st.Blksize > iobase {
+		return int(st.Blksize)
+	}
+	return iobase
+}
+
 func shortread() {
 	log.Fatal("Read: short read")
 }
 
-func read(f *os.File, buf []byte) bool {
-	for bo := 0; bo < len(buf); {
-		n, err := f.Read(buf[bo:])
+const leadup = 1 + int(unsafe.Sizeof(uint32(0)))
+
+type FUSEReader struct {
+	*os.File
+	buf []byte
+	off int
+}
+
+func NewFUSEReader(f *os.File) *FUSEReader {
+	fr := &FUSEReader{File: f}
+	fr.buf = make([]byte, 0, iosize(f))
+	fr.off = 0
+	return fr
+}
+
+// rawread attempts to read at least req bytes to
+// the reader's buffer. If already at EOF, it returns
+// false; if succeeded, returns true; in all other
+// cases the program is terminated. On success, the
+// length of the reader's buffer is adjusted to mark
+// the region of read data.
+func (fr *FUSEReader) rawread(req int) bool {
+	buf := fr.buf[len(fr.buf):cap(fr.buf)]
+	if req > len(buf) {
+		panic("required more bytes than buffer size")
+	}
+	n := 0
+	for n < req {
+		r, err := fr.File.Read(buf[n:])
 		switch err {
 		case io.EOF:
-			if bo == 0 {
+			if n == 0 {
 				return false
 			}
 			shortread()
 		case nil:
-			bo += n
+			n += r
 		default:
-			log.Fatal("Read: ", err)
+			log.Fatal(err)
 		}
 	}
+	fr.buf = fr.buf[:len(fr.buf)+n]
 	return true
 }
+
+func (fr *FUSEReader) rewind() {
+	copy(fr.buf, fr.buf[fr.off:])
+	fr.buf = fr.buf[:len(fr.buf)-fr.off]
+	fr.off = 0
+}
+
+func (fr *FUSEReader) extend(n int) {
+	fr.buf = append(fr.buf[:cap(fr.buf)], make([]byte, n-cap(fr.buf))...)[:len(fr.buf)]
+}
+
+// read attempts to return a FUSE message (either from buffer space or freshly
+// read in). If no partial message is stored and we are already at EOF,
+// returns nil; if suceeded, returns a byte array containing the message; in
+// all other case, the program is terminated.  On success, the length of the
+// reader's buffer is adjusted to mark the region of read data, and reader's
+// offset is adjusted to the end of the message.
+func (fr *FUSEReader) read() []byte {
+	fresh := len(fr.buf) - fr.off
+	if
+	// no unconsumed data, we can rewind for free
+	fresh == 0 ||
+		// not enough space in buffer tail,
+		// rewind to get space
+		fr.off+leadup > cap(fr.buf) {
+		fr.rewind()
+	}
+	if fresh < leadup {
+		if !fr.rawread(leadup - fresh) {
+			if fresh == 0 {
+				return nil
+			} else {
+				shortread()
+			}
+		}
+		fresh = len(fr.buf) - fr.off
+	}
+
+	mlen := 1 + int(*(*uint32)(unsafe.Pointer(&fr.buf[fr.off+1])))
+	if fr.off+mlen > cap(fr.buf) {
+		fr.rewind()
+		if mlen > cap(fr.buf) {
+			fr.extend(mlen)
+		}
+	}
+	if fresh < mlen && !fr.rawread(mlen-fresh) {
+		shortread()
+	}
+
+	buf := fr.buf[fr.off:][:mlen]
+	fr.off += mlen
+	return buf
+}
+
+//
+// special parsing support routines
+//
 
 const direntSize = int(unsafe.Sizeof(protogen.Dirent{}))
 
@@ -119,6 +226,10 @@ func parsedir(data []byte) ([][]interface{}, []byte) {
 
 	return dea, data
 }
+
+//
+// main
+//
 
 const usage = `fusedump disector
 FUSE version: %d.%d
@@ -189,30 +300,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	hbuf := make([]byte, 1+insize)
-	dbuf := make([]byte, 0, 4096)
-
+	fr := NewFUSEReader(fi)
 	umap := make(map[uint64]int)
-	var body []interface{}
-
 	for {
-		if !read(fi, hbuf[:1+outsize]) {
-			os.Exit(0)
+		var body []interface{}
+		var dir byte
+
+		buf := fr.read()
+		if buf == nil {
+			break
 		}
-		switch hbuf[0] {
+		dir, buf = buf[0], buf[1:]
+
+		switch dir {
 		case 'R':
-			if !read(fi, hbuf[1+outsize:]) {
-				shortread()
-			}
-			inh := (*protogen.InHeader)(unsafe.Pointer(&hbuf[1]))
-			dlen := int(inh.Len) - insize
-			if cap(dbuf) < dlen {
-				dbuf = make([]byte, dlen)
-			}
-			dbuf = dbuf[:dlen]
-			if !read(fi, dbuf) {
-				shortread()
-			}
+			inh := (*protogen.InHeader)(unsafe.Pointer(&buf[0]))
 			opname := ""
 			if int(inh.Opcode) < len(protogen.FuseOpnames) {
 				opname = protogen.FuseOpnames[inh.Opcode]
@@ -220,7 +322,7 @@ func main() {
 			if opname == "" {
 				opname = fmt.Sprintf("OP#%d", inh.Opcode)
 			}
-			body = protogen.ParseR(inh.Opcode, dbuf)
+			body = protogen.ParseR(inh.Opcode, buf[insize:])
 			formatter(*lim, opname, *inh, body)
 			// special handling for some ops
 			switch inh.Opcode {
@@ -238,21 +340,14 @@ func main() {
 				umap[inh.Unique] = int(inh.Opcode)
 			}
 		case 'W':
-			ouh := (*protogen.OutHeader)(unsafe.Pointer(&hbuf[1]))
-			dlen := int(ouh.Len) - outsize
-			if cap(dbuf) < dlen {
-				dbuf = make([]byte, dlen)
-			}
-			dbuf = dbuf[:dlen]
-			if !read(fi, dbuf) {
-				shortread()
-			}
+			ouh := (*protogen.OutHeader)(unsafe.Pointer(&buf[0]))
+			buf = buf[outsize:]
 			if opcode, ok := umap[ouh.Unique]; ok {
 				delete(umap, ouh.Unique)
 				if opcode < 0 {
-					if len(dbuf) == int(unsafe.Sizeof(protogen.GetxattrOut{})) {
+					if len(buf) == int(unsafe.Sizeof(protogen.GetxattrOut{})) {
 						body = []interface{}{
-							*(*protogen.GetxattrOut)(unsafe.Pointer(&dbuf[0])),
+							*(*protogen.GetxattrOut)(unsafe.Pointer(&buf[0])),
 						}
 					} else {
 						opcode *= -1
@@ -262,7 +357,7 @@ func main() {
 					switch uint32(opcode) {
 					case protogen.READDIR:
 						body = make([]interface{}, 0, 1)
-						dea, data := parsedir(dbuf)
+						dea, data := parsedir(buf)
 						if len(dea) > 0 {
 							body = append(body, dea)
 						}
@@ -270,18 +365,18 @@ func main() {
 							body = append(body, data)
 						}
 					case protogen.LISTXATTR:
-						nama := strings.Split(string(dbuf), "\x00")
+						nama := strings.Split(string(buf), "\x00")
 						body = []interface{}{nama[:len(nama)-1]}
 					default:
-						body = protogen.ParseW(uint32(opcode), dbuf)
+						body = protogen.ParseW(uint32(opcode), buf)
 					}
 				}
 				formatter(*lim, *ouh, body)
 			} else {
-				formatter(*lim, *ouh, dbuf)
+				formatter(*lim, *ouh, buf)
 			}
 		default:
-			log.Fatalf("unknown direction %q", hbuf[0])
+			log.Fatalf("unknown direction %q", dir)
 		}
 	}
 }
