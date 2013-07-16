@@ -204,22 +204,41 @@ func (fr *FUSEReader) read() []byte {
 // special parsing support routines
 //
 
-const direntSize = int(unsafe.Sizeof(protogen.Dirent{}))
+const (
+	direntSize = int(unsafe.Sizeof(protogen.Dirent{}))
+	entryoutSize = int(unsafe.Sizeof(protogen.EntryOut{}))
+)
 
-func parsedir(data []byte) ([][]interface{}, []byte) {
-	dea := make([][]interface{}, 0, len(data)/(direntSize+10))
+func parsedir(data []byte, opcode uint32) ([][]interface{}, []byte) {
+	plussiz := 0
+	if opcode == protogen.READDIRPLUS {
+		plussiz = entryoutSize
+	}
+	dea := make([][]interface{}, 0, len(data)/(plussiz + direntSize+10))
 
 	for len(data) >= direntSize {
-		dex := make([]interface{}, 2)
+		nmemb := 2
+		if opcode == protogen.READDIRPLUS {
+			nmemb++
+		}
+		dex := make([]interface{}, nmemb)
+		i := 0
+		if opcode == protogen.READDIRPLUS {
+			dex[i] = *(*protogen.EntryOut)(unsafe.Pointer(&data[0]))
+			i++
+			data = data[entryoutSize:]
+		}
 		de := *(*protogen.Dirent)(unsafe.Pointer(&data[0]))
-		dex[0] = de
+		dex[i] = de
+		i++
 		nlen := int(de.Namelen)
 		recordsize := direntSize + nlen + ((8 - nlen&7) & 7)
 		if len(data) < recordsize {
 			// cannot parse
 			break
 		}
-		dex[1] = string(data[direntSize:][:nlen])
+		dex[i] = string(data[direntSize:][:nlen])
+		i++
 		dea = append(dea, dex)
 		data = data[recordsize:]
 	}
@@ -354,10 +373,11 @@ func main() {
 					}
 				}
 				if opcode >= 0 {
-					switch uint32(opcode) {
-					case protogen.READDIR:
+					uopcode := uint32(opcode)
+					switch uopcode {
+					case protogen.READDIR, protogen.READDIRPLUS:
 						body = make([]interface{}, 0, 1)
-						dea, data := parsedir(buf)
+						dea, data := parsedir(buf, uopcode)
 						if len(dea) > 0 {
 							body = append(body, dea)
 						}
