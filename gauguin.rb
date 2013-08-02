@@ -13,6 +13,8 @@ class FuseMsg
 package protogen
 
 import (
+	"encoding/binary"
+	"bytes"
 	"log"
 	"unsafe"
 )
@@ -87,23 +89,76 @@ GOBLOCK
     end
 
     def makestruct name, desc, out
-      out << "type #{typemap name} struct {\n"
+      s = typemap name
+      out <<
+<<GOBLOCK
+// #{s}
+type #{s} struct {
+GOBLOCK
       desc.each { |f,v|
         out << "\t#{camelize v} #{typemap f}\n"
       }
-      out << "}\n\n"
+      out <<
+<<GOBLOCK
+}
+
+func as#{s}(buf []byte) *#{s} {
+	return (*#{s})(unsafe.Pointer(&buf[0]))
+}
+
+func as#{s}Bytesex(buf []byte, o binary.ByteOrder) *#{s} {
+	a#{s} := new(#{s})
+	binary.Read(bytes.NewBuffer(buf), o, a#{s})
+	return a#{s}
+}
+
+GOBLOCK
     end
 
     def makestructs out
       Ctypes[:Struct].each { |s,d|
         makestruct s, d, out
       }
+      out <<
+<<GOBLOCK
+type DataCaster struct {
+	AsUint32 func([]byte) uint32
+GOBLOCK
+      Ctypes[:Struct].each_key { |s|
+        t = typemap s
+        out << "\tAs#{t} func([]byte) *#{t}\n"
+      }
+      out <<
+<<GOBLOCK
+}
+
+var NativeDataCaster = DataCaster {
+	AsUint32: func(buf []byte) uint32 { return *(*uint32)(unsafe.Pointer(&buf[0])) },
+GOBLOCK
+      Ctypes[:Struct].each_key { |s|
+        t = typemap s
+	out << "\tAs#{t}: as#{t},\n"
+      }
+      out << "}\n\n"
+      %w[Little Big].each { |e|
+        out <<
+<<GOBLOCK
+var #{e[0]}eDataCaster = DataCaster {
+	AsUint32: func(buf []byte) uint32 { return binary.#{e}Endian.Uint32(buf) },
+GOBLOCK
+        Ctypes[:Struct].each_key { |s|
+          t = typemap s
+          out << "\tAs#{t}: func(buf []byte) *#{t} { return as#{t}Bytesex(buf, binary.#{e}Endian) },\n"
+        }
+        out << "}\n\n"
+      }
+      out << "\n\n"
     end
 
     def makeparser fnam, mmap, out
       out <<
 <<GOBLOCK
-func #{fnam}(opcode uint32, data []byte) (a []interface{}) {
+func #{fnam}(datacaster DataCaster, opcode uint32, data []byte) (a []interface{}) {
 	pos := 0
 	a = make([]interface{}, 0, 2)
 	switch opcode {
@@ -132,7 +187,7 @@ GOBLOCK
           else
 <<GOBLOCK
 		if len(data[pos:]) >= int(unsafe.Sizeof(#{t}{})) {
-			a = append(a, *(*#{t})(unsafe.Pointer(&data[pos])))
+			a = append(a, *datacaster.As#{t}(data[pos:]))
 			pos += int(unsafe.Sizeof(#{t}{}))
 		} else {
 				a = append(a, data[pos:])

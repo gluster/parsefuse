@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -13,7 +14,9 @@ import (
 	"unsafe"
 )
 
-import "parsefuse/protogen"
+import (
+	"parsefuse/protogen"
+)
 
 //
 // formatting routines
@@ -184,7 +187,7 @@ func (fr *FUSEReader) read() []byte {
 		fresh = len(fr.buf) - fr.off
 	}
 
-	mlen := 1 + int(*(*uint32)(unsafe.Pointer(&fr.buf[fr.off+1])))
+	mlen := 1 + int(datacaster.AsUint32(fr.buf[fr.off+1:]))
 	if fr.off+mlen > cap(fr.buf) {
 		fr.rewind()
 		if mlen > cap(fr.buf) {
@@ -224,11 +227,11 @@ func parsedir(data []byte, opcode uint32) ([][]interface{}, []byte) {
 		dex := make([]interface{}, nmemb)
 		i := 0
 		if opcode == protogen.READDIRPLUS {
-			dex[i] = *(*protogen.EntryOut)(unsafe.Pointer(&data[0]))
+			dex[i] = *datacaster.AsEntryOut(data)
 			i++
 			data = data[entryoutSize:]
 		}
-		de := *(*protogen.Dirent)(unsafe.Pointer(&data[0]))
+		de := *datacaster.AsDirent(data)
 		dex[i] = de
 		i++
 		nlen := int(de.Namelen)
@@ -256,6 +259,7 @@ FUSE version: %d.%d
 %s [options] [<fusedump>]
 options:
 `
+var datacaster protogen.DataCaster = protogen.NativeDataCaster
 
 func main() {
 	insize := int(unsafe.Sizeof(protogen.InHeader{}))
@@ -271,6 +275,7 @@ func main() {
 	}
 	lim := flag.Int("lim", 512, "truncate output data to this size")
 	format := flag.String("format", "fmt", "output format (fmt, json or null)")
+	bytesexspec := flag.String("bytesex", "native", "endianness of data")
 	fopath := flag.String("o", "-", "output file")
 	flag.Parse()
 
@@ -287,6 +292,28 @@ func main() {
 	default:
 		flag.Usage()
 		os.Exit(1)
+	}
+
+	host_bytesex := getBytesex()
+	var data_bytesex binary.ByteOrder
+	switch *bytesexspec {
+	case "native":
+		data_bytesex = host_bytesex
+	case "le":
+		data_bytesex = binary.LittleEndian
+	case "be":
+		data_bytesex = binary.BigEndian
+	default:
+		log.Fatalf("unknown bytesex %s", *bytesexspec)
+	}
+	switch data_bytesex {
+	case host_bytesex:
+	case binary.LittleEndian:
+		datacaster = protogen.LeDataCaster
+	case binary.BigEndian:
+		datacaster = protogen.BeDataCaster
+	default:
+		panic("should not be here")
 	}
 
 	var fo *os.File
@@ -333,7 +360,7 @@ func main() {
 
 		switch dir {
 		case 'R':
-			inh := (*protogen.InHeader)(unsafe.Pointer(&buf[0]))
+			inh := datacaster.AsInHeader(buf)
 			opname := ""
 			if int(inh.Opcode) < len(protogen.FuseOpnames) {
 				opname = protogen.FuseOpnames[inh.Opcode]
@@ -341,7 +368,7 @@ func main() {
 			if opname == "" {
 				opname = fmt.Sprintf("OP#%d", inh.Opcode)
 			}
-			body = protogen.ParseR(inh.Opcode, buf[insize:])
+			body = protogen.ParseR(datacaster, inh.Opcode, buf[insize:])
 			formatter(*lim, opname, *inh, body)
 			// special handling for some ops
 			switch inh.Opcode {
@@ -359,14 +386,14 @@ func main() {
 				umap[inh.Unique] = int(inh.Opcode)
 			}
 		case 'W':
-			ouh := (*protogen.OutHeader)(unsafe.Pointer(&buf[0]))
+			ouh := datacaster.AsOutHeader(buf)
 			buf = buf[outsize:]
 			if opcode, ok := umap[ouh.Unique]; ok {
 				delete(umap, ouh.Unique)
 				if opcode < 0 {
 					if len(buf) == int(unsafe.Sizeof(protogen.GetxattrOut{})) {
 						body = []interface{}{
-							*(*protogen.GetxattrOut)(unsafe.Pointer(&buf[0])),
+							*datacaster.AsGetxattrOut(buf),
 						}
 					} else {
 						opcode *= -1
@@ -388,7 +415,7 @@ func main() {
 						nama := strings.Split(string(buf), "\x00")
 						body = []interface{}{nama[:len(nama)-1]}
 					default:
-						body = protogen.ParseW(uint32(opcode), buf)
+						body = protogen.ParseW(datacaster, uint32(opcode), buf)
 					}
 				}
 				formatter(*lim, *ouh, body)
