@@ -1,0 +1,153 @@
+package protogen
+
+import (
+	"encoding/binary"
+	"bytes"
+	"log"
+	"unsafe"
+)
+
+func clen(n []byte) int {
+	for i := 0; i < len(n); i++ {
+		if n[i] == 0 {
+			return i
+		}
+	}
+	log.Fatal("terminating zero not found in C string")
+	return -1
+}
+
+<% if FuseVersion.size == 2 %>
+const(
+	FuseMajor = <%= FuseVersion[0] %>
+	FuseMinor = <%= FuseVersion[1] %>
+)
+
+<% end %>
+const(
+<%
+Ctypes[:Enum].each do |e,a|
+  a.each do |n,v|
+    v or next
+%>	<%= opcodemap n %> uint32 = <%= v %>
+<%
+  end
+end
+%>
+)
+
+
+var FuseOpnames = [...]string{
+<%
+used = Set.new [nil]
+Ctypes[:Enum].each do |e,a|
+  a.each do |n,v|
+    used.include? v and next
+    n = opcodemap n
+%>	<%= n %>: "<%= n %>",
+<%
+    used << v
+  end
+end
+%>
+}
+
+<%
+Ctypes[:Struct].each do |name, desc|
+  stru = typemap name
+%>// <%= stru %>
+type <%= stru %> struct {
+  <% desc.each do |f,v| %>	<%= camelize v %> <%= typemap f %>
+  <% end %>
+}
+
+func as<%= stru %>(buf []byte) *<%= stru %> {
+	return (*<%= stru %>)(unsafe.Pointer(&buf[0]))
+}
+
+func as<%= stru %>Bytesex(buf []byte, o binary.ByteOrder) *<%= stru %> {
+	a<%= stru %> := new(<%= stru %>)
+	binary.Read(bytes.NewBuffer(buf), o, a<%= stru %>)
+	return a<%= stru %>
+}
+
+<% end %>
+
+type DataCaster struct {
+	AsUint32 func([]byte) uint32
+<%
+Ctypes[:Struct].each_key do |s|
+  stru = typemap s
+%>	As<%= stru %> func([]byte) *<%= stru %>
+<% end %>
+}
+
+var NativeDataCaster = DataCaster {
+	AsUint32: func(buf []byte) uint32 { return *(*uint32)(unsafe.Pointer(&buf[0])) },
+<%
+Ctypes[:Struct].each_key do |s|
+  stru = typemap s
+%>	As<%= stru %>: as<%= stru %>,
+<% end %>
+}
+
+<% %w[Little Big].each do |bytesex| %>
+var <%= bytesex[0] %>eDataCaster = DataCaster {
+	AsUint32: func(buf []byte) uint32 { return binary.<%= bytesex %>Endian.Uint32(buf) },
+  <%
+    Ctypes[:Struct].each_key do |s|
+      stru = typemap s
+  %>	As<%= stru %>: func(buf []byte) *<%= stru %> { return as<%= stru %>Bytesex(buf, binary.<%= bytesex %>Endian) },
+  <% end %>
+}
+<% end %>
+
+<% Msgmap.each do |dir, mmap| %>
+func Parse<%= dir %>(datacaster DataCaster, opcode uint32, data []byte) (a []interface{}) {
+	pos := 0
+	a = make([]interface{}, 0, 2)
+	switch opcode {
+  <%
+    mmap.each do |c,d|
+      d or next
+      d = d.map { |t| typemap t }
+      d[0...-1].include? "[0]byte" and raise "[0]byte type must be trailing"
+    %>	case <%= opcodemap c %>:
+      <%
+          strings = 0
+          d.each do |t|
+            case t
+            when "[0]byte"
+        %>
+		a = append(a, data[pos:])
+        <%
+            when "string"
+        %>
+		l <%= (strings += 1) == 1 ? ":" : "" %>= clen(data[pos:])
+		a = append(a, string(data[pos:][:l]))
+		pos += l + 1
+        <%
+            else
+        %>
+		if len(data[pos:]) >= int(unsafe.Sizeof(<%= t %>{})) {
+			a = append(a, *datacaster.As<%= t %>(data[pos:]))
+			pos += int(unsafe.Sizeof(<%= t %>{}))
+		} else {
+				a = append(a, data[pos:])
+		}
+        <%
+          end
+        end
+      end
+  %>
+	default:
+		if FuseOpnames[opcode] == "" {
+			log.Printf("warning: unknown opcode %d", opcode)
+		} else {
+			log.Printf("warning: format spec missing for %s", FuseOpnames[opcode])
+		}
+		a = append(a, data)
+	}
+	return
+}
+<% end %>
