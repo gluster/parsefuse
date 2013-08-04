@@ -75,6 +75,7 @@ func as<%= stru %>Bytesex(buf []byte, o binary.ByteOrder) *<%= stru %> {
 
 type DataCaster struct {
 	AsUint32 func([]byte) uint32
+	AsUint64 func([]byte) uint64
 <%
 Ctypes[:Struct].each_key do |s|
   stru = typemap s
@@ -84,6 +85,7 @@ Ctypes[:Struct].each_key do |s|
 
 var NativeDataCaster = DataCaster {
 	AsUint32: func(buf []byte) uint32 { return *(*uint32)(unsafe.Pointer(&buf[0])) },
+	AsUint64: func(buf []byte) uint64 { return *(*uint64)(unsafe.Pointer(&buf[0])) },
 <%
 Ctypes[:Struct].each_key do |s|
   stru = typemap s
@@ -94,6 +96,7 @@ Ctypes[:Struct].each_key do |s|
 <% %w[Little Big].each do |bytesex| %>
 var <%= bytesex[0] %>eDataCaster = DataCaster {
 	AsUint32: func(buf []byte) uint32 { return binary.<%= bytesex %>Endian.Uint32(buf) },
+	AsUint64: func(buf []byte) uint64 { return binary.<%= bytesex %>Endian.Uint64(buf) },
   <%
     Ctypes[:Struct].each_key do |s|
       stru = typemap s

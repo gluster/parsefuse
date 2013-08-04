@@ -105,7 +105,10 @@ func shortread() {
 	log.Fatal("Read: short read")
 }
 
-const leadup = 1 + int(unsafe.Sizeof(uint32(0)))
+const(
+	sizeu32 = int(unsafe.Sizeof(uint32(0)))
+	sizeu64 = int(unsafe.Sizeof(uint64(0)))
+)
 
 type FUSEReader struct {
 	*os.File
@@ -166,18 +169,21 @@ func (fr *FUSEReader) extend(n int) {
 // all other case, the program is terminated.  On success, the length of the
 // reader's buffer is adjusted to mark the region of read data, and reader's
 // offset is adjusted to the end of the message.
-func (fr *FUSEReader) read() []byte {
+//
+// leadup specifies the offset of the integer which specifies the size of the
+// particular packet.
+func (fr *FUSEReader) read(leadup int) []byte {
 	fresh := len(fr.buf) - fr.off
 	if
 	// no unconsumed data, we can rewind for free
 	fresh == 0 ||
 		// not enough space in buffer tail,
 		// rewind to get space
-		fr.off+leadup > cap(fr.buf) {
+		fr.off+leadup+sizeu32 > cap(fr.buf) {
 		fr.rewind()
 	}
-	if fresh < leadup {
-		if !fr.rawread(leadup - fresh) {
+	if fresh < leadup+sizeu32 {
+		if !fr.rawread(leadup+sizeu32 - fresh) {
 			if fresh == 0 {
 				return nil
 			} else {
@@ -187,7 +193,7 @@ func (fr *FUSEReader) read() []byte {
 		fresh = len(fr.buf) - fr.off
 	}
 
-	mlen := 1 + int(datacaster.AsUint32(fr.buf[fr.off+1:]))
+	mlen := leadup + int(datacaster.AsUint32(fr.buf[fr.off+leadup:]))
 	if fr.off+mlen > cap(fr.buf) {
 		fr.rewind()
 		if mlen > cap(fr.buf) {
@@ -202,6 +208,53 @@ func (fr *FUSEReader) read() []byte {
 	fr.off += mlen
 	return buf
 }
+
+// FUSEMsgReader is an interface that is to be implemented
+// for each format version.
+//
+// readmsg returns a message deooded to the degree general
+// (opcode-independent) decoding is possible: returning
+// dir, the direction of the message (read/written),
+// meta, format version specific metainformation, and
+// the undecoded message buffer.
+type FUSEMsgReader interface {
+	readmsg() (dir byte, meta []interface{}, buf []byte)
+}
+
+
+type FUSEMsgReader10 struct {
+	*FUSEReader
+}
+
+func (fmr *FUSEMsgReader10) readmsg() (dir byte, meta []interface{}, buf []byte) {
+	buf = fmr.read(1)
+	if buf == nil {
+		return
+	}
+	dir, buf = buf[0], buf[1:]
+	return
+}
+
+
+type FUSEMsgReader20 struct {
+	*FUSEMsgReader10
+}
+
+type Time [2]uint64
+
+func (fmr *FUSEMsgReader20) readmsg() (dir byte, meta []interface{}, buf []byte) {
+	dir, meta, buf = fmr.FUSEMsgReader10.readmsg()
+	if len(buf) >= sizeu32 + sizeu64 + sizeu32 {
+		meta = []interface{} { Time{datacaster.AsUint64(buf[sizeu32:]),
+			   uint64(datacaster.AsUint32(buf[sizeu32+sizeu64:]))} }
+	}
+	if len(buf) > sizeu32 + sizeu64 + sizeu32 {
+		meta = append(meta, buf[sizeu32 + sizeu64 + sizeu32:])
+	}
+	buf = fmr.read(0)
+	return
+}
+
 
 //
 // special parsing support routines
@@ -277,6 +330,7 @@ func main() {
 	format := flag.String("format", "fmt", "output format (fmt, json or null)")
 	bytesexspec := flag.String("bytesex", "native", "endianness of data")
 	fopath := flag.String("o", "-", "output file")
+	dumpfmt := flag.Float64("dumpformat", 1, "version of dump format")
 	flag.Parse()
 
 	var fi *os.File
@@ -292,6 +346,18 @@ func main() {
 	default:
 		flag.Usage()
 		os.Exit(1)
+	}
+
+	var frm FUSEMsgReader
+	fr := NewFUSEReader(fi)
+	frm10 := &FUSEMsgReader10{ fr }
+	switch *dumpfmt {
+	case 1.0:
+		frm = frm10
+	case 2.0:
+		frm = &FUSEMsgReader20{ frm10 }
+	default:
+		log.Fatalf("unknown fusedump format version %.2f", *dumpfmt)
 	}
 
 	host_bytesex := getBytesex()
@@ -346,17 +412,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	fr := NewFUSEReader(fi)
 	umap := make(map[uint64]int)
 	for {
 		var body []interface{}
 		var dir byte
 
-		buf := fr.read()
+		dir, meta, buf := frm.readmsg()
 		if buf == nil {
 			break
 		}
-		dir, buf = buf[0], buf[1:]
 
 		switch dir {
 		case 'R':
@@ -369,7 +433,7 @@ func main() {
 				opname = fmt.Sprintf("OP#%d", inh.Opcode)
 			}
 			body = protogen.ParseR(datacaster, inh.Opcode, buf[insize:])
-			formatter(*lim, opname, *inh, body)
+			formatter(*lim, meta, opname, *inh, body)
 			// special handling for some ops
 			switch inh.Opcode {
 			case protogen.LISTXATTR, protogen.GETXATTR:
@@ -418,9 +482,9 @@ func main() {
 						body = protogen.ParseW(datacaster, uint32(opcode), buf)
 					}
 				}
-				formatter(*lim, *ouh, body)
+				formatter(*lim, meta, *ouh, body)
 			} else {
-				formatter(*lim, *ouh, buf)
+				formatter(*lim, meta, *ouh, buf)
 			}
 		default:
 			log.Fatalf("unknown direction %q", dir)
