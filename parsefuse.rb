@@ -30,7 +30,8 @@ class FuseMsg
       end
     }
     cp = C::Parser.new
-    %w[__s32 __s64 __u32 __u64 __u16].each{|t| cp.type_names  << t}
+    %w[__s32 __s64 __u32 __u64 __u16
+       int32_t int64_t uint32_t uint64_t uint16_t].each{|t| cp.type_names  << t}
     ct = cp.parse ca.join
     ct.entities.each {|e|
       et = e.type

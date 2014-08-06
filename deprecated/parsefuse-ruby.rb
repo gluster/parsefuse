@@ -32,6 +32,11 @@ class FuseMsg
     '__u32'  => 'L',
     '__u64'  => 'Q',
     '__u16'  => 'S',
+    'int32_t'  => 'l',
+    'int64_t'  => 'q',
+    'uint32_t'  => 'L',
+    'uint64_t'  => 'Q',
+    'uint16_t'  => 'S',
     'char'   => 'a*',
     'string' => 'Z*'
   }

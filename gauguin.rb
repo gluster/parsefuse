@@ -20,9 +20,9 @@ class FuseMsg
       case tnam
       when /^fuse_(.*)|(^cuse.*)/
         camelize($1||$2)
-      when /^__u(\d+)$/
+      when /^__u(\d+)$/, /^uint(\d+)_t$/
         "uint#{$1}"
-      when /^__s(\d+)$/
+      when /^__s(\d+)$/, /^int(\d+)_t$/
         "int#{$1}"
       when "char"
         "[0]byte"
