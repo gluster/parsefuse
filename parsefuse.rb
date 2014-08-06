@@ -4,28 +4,12 @@ require 'cast'
 
 class FuseMsg
 
-  PrintLimit = 512
-
-  class FuseMsgError < RuntimeError
-  end
-
-
   ### Model ###
 
   FuseVersion = []
 
   Ctypes = {}
   Msgmap = {}
-  Zipcodes = {
-    '__s32'  => 'l',
-    '__s64'  => 'q',
-    '__u32'  => 'L',
-    '__u64'  => 'Q',
-    '__u16'  => 'S',
-    'char'   => 'a*',
-    'string' => 'Z*'
-  }
-
   Messages = {}
   MsgBodies = {} ## some default entries added later
 

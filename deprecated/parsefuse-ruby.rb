@@ -21,6 +21,22 @@ end
 
 class FuseMsg
 
+  PrintLimit = 512
+
+  class FuseMsgError < RuntimeError
+  end
+
+  Zipcodes = {
+    '__s32'  => 'l',
+    '__s64'  => 'q',
+    '__u32'  => 'L',
+    '__u64'  => 'Q',
+    '__u16'  => 'S',
+    'char'   => 'a*',
+    'string' => 'Z*'
+  }
+
+
   ###### ORM layer #######
   ###### (t3h metaprogramming v00d00)
 
