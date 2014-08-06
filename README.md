@@ -30,7 +30,7 @@ which the producer of the fusedumps to dissect was built with.
 Once you have this, build _parsefuse_ with the following command:
 
 ```sh
-./make.sh -p <path-to-fuse-header> -m messages.json
+./make.sh -p <path-to-fuse-header>
 ```
 
 After a succesful build you will have the binary at _go/bin/parsefuse_.
