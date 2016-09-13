@@ -261,7 +261,7 @@ func (fmr *FUSEMsgReader20) readmsg() (dir byte, meta []interface{}, buf []byte)
 //
 
 const (
-	direntSize = int(unsafe.Sizeof(protogen.Dirent{}))
+	direntSize = int(unsafe.Offsetof(protogen.Dirent{}.Name))
 	entryoutSize = int(unsafe.Sizeof(protogen.EntryOut{}))
 )
 
