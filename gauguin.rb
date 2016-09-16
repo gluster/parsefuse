@@ -16,18 +16,18 @@ class FuseMsg
       nam.split("_").map { |x| x.capitalize }.join
     end
 
+    def structname tnam
+      camelize($1||$2) if tnam =~ /^fuse_(.*)|(^cuse.*)/
+    end
+
     def typemap tnam
-      case tnam
-      when /^fuse_(.*)|(^cuse.*)/
-        camelize($1||$2)
+      structname tnam or case tnam
       when /^__u(\d+)$/, /^uint(\d+)_t$/
         "uint#{$1}"
       when /^__s(\d+)$/, /^int(\d+)_t$/
         "int#{$1}"
       when "char"
         "[0]byte"
-      when "string"
-        "string"
       else
         raise "unknown C type #{tnam}"
       end

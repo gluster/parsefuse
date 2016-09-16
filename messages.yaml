@@ -4,6 +4,7 @@
 {
     "R": {
         "FUSE_ACCESS":        ["fuse_access_in"],
+        # this was pre-7.12
         # "FUSE_CREATE":        ["fuse_open_in", "string"],
         "FUSE_CREATE":        ["fuse_create_in", "string"],
         "FUSE_FLUSH":         ["fuse_flush_in"],
@@ -15,7 +16,7 @@
         "FUSE_GETATTR":       ["fuse_getattr_in"],
         "FUSE_GETLK":         ["fuse_lk_in"],
         "FUSE_GETXATTR":      ["fuse_getxattr_in", "string"],
-        "FUSE_IOCTL":         ["fuse_ioctl_in", "char"],
+        "FUSE_IOCTL":         ["fuse_ioctl_in", "buf"],
         "FUSE_INIT":          ["fuse_init_in"],
         "FUSE_LINK":          ["fuse_link_in", "string"],
         "FUSE_LISTXATTR":     ["fuse_getxattr_in"],
@@ -36,11 +37,11 @@
         "FUSE_SETATTR":       ["fuse_setattr_in"],
         "FUSE_SETLK":         ["fuse_lk_in"],
         "FUSE_SETLKW":        ["fuse_lk_in"],
-        "FUSE_SETXATTR":      ["fuse_setxattr_in", "string", "char"],
+        "FUSE_SETXATTR":      ["fuse_setxattr_in", "string", "buf"],
         "FUSE_STATFS":        [],
         "FUSE_SYMLINK":       ["string"],
         "FUSE_UNLINK":        ["string"],
-        "FUSE_WRITE":         ["fuse_write_in", "char"]
+        "FUSE_WRITE":         ["fuse_write_in", "buf"]
     },
     "W": {
         "FUSE_ACCESS":        [],
@@ -51,26 +52,31 @@
         "FUSE_FSYNCDIR":      [],
         "FUSE_GETATTR":       ["fuse_attr_out"],
         "FUSE_GETLK":         ["fuse_lk_out"],
-        # can also be like:
-        # FUSE_GETXATTR:        ["fuse_getxattr_out"],
-        # code has special handler
-        "FUSE_GETXATTR":      ["char"],
-        "FUSE_IOCTL":         ["fuse_ioctl_out", "char"],
+        "FUSE_GETXATTR":      ["buf"],
+        # can come with payload also in this form:
+        # "FUSE_GETXATTR":      ["fuse_getxattr_out"],
+        # for which we use a special handler
+        "FUSE_IOCTL":         ["fuse_ioctl_out", "buf"],
         "FUSE_INIT":          ["fuse_init_out"],
         "FUSE_LINK":          ["fuse_entry_out"],
-        # can also be like:
-        # FUSE_LISTXATTR:       ["fuse_getxattr_out"],
-        # code has special handler
-        "FUSE_LISTXATTR":     ["char"],
+        # can come with payload in both forms:
+        # "FUSE_LISTXATTR":     ["fuse_getxattr_out"],
+        # "FUSE_LISTXATTR":     ["string", ...],
+        # so we need a special handler to recognize and parse
+        "FUSE_LISTXATTR":     false,
         "FUSE_LOOKUP":        ["fuse_entry_out"],
         "FUSE_MKDIR":         ["fuse_entry_out"],
         "FUSE_MKNOD":         ["fuse_entry_out"],
         "FUSE_OPENDIR":       ["fuse_open_out"],
         "FUSE_OPEN":          ["fuse_open_out"],
-        "FUSE_READ":          ["char"],
-        "FUSE_READDIR":       ["char"],
-        "FUSE_READDIRPLUS":   ["char"],
-        "FUSE_READLINK":      ["char"],
+        "FUSE_READ":          ["buf"],
+        # informal description:
+        # "FUSE_READDIR":     ["fuse_dirent", ...]
+        "FUSE_READDIR":       false,
+        # informal description:
+        # "FUSE_READDIR":     [["fuse_entry_out","fuse_dirent"], ...]
+        "FUSE_READDIRPLUS":   false,
+        "FUSE_READLINK":      ["buf"],
         "FUSE_RELEASE":       [],
         "FUSE_RELEASEDIR":    [],
         "FUSE_REMOVEXATTR":   [],

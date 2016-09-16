@@ -37,7 +37,7 @@ class FuseMsg
     'uint32_t'  => 'L',
     'uint64_t'  => 'Q',
     'uint16_t'  => 'S',
-    'char'   => 'a*',
+    'buf'    => 'a*',
     'string' => 'Z*'
   }
 
@@ -169,7 +169,12 @@ class FuseMsg
       end
 
       def populate buf, dtyp
-        dtyp.each { |t| self.<< *t }
+        # dtyp can be false which indicates that a special handler
+        # is needed (the message description syntax is not capable of
+        # properly describe the message structure). In that case
+        # we just fall back to the ["buf"] description (ie. handling it
+        # just as an unstructured blob).
+        (dtyp || ["buf"]).each { |t| self.<< *t }
         deploy
         leaftypes = []
         walk { |kv| leaftypes << kv[1] }

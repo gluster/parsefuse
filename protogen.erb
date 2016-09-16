@@ -54,7 +54,7 @@ end
 
 <%
 Ctypes[:Struct].each do |name, desc|
-  stru = typemap name
+  stru = structname name
 %>// <%= stru %>
 type <%= stru %> struct {
   <% desc.each do |f,v| %>	<%= camelize v %> <%= typemap f %>
@@ -78,7 +78,7 @@ type DataCaster struct {
 	AsUint64 func([]byte) uint64
 <%
 Ctypes[:Struct].each_key do |s|
-  stru = typemap s
+  stru = structname s
 %>	As<%= stru %> func([]byte) *<%= stru %>
 <% end %>
 }
@@ -88,7 +88,7 @@ var NativeDataCaster = DataCaster {
 	AsUint64: func(buf []byte) uint64 { return *(*uint64)(unsafe.Pointer(&buf[0])) },
 <%
 Ctypes[:Struct].each_key do |s|
-  stru = typemap s
+  stru = structname s
 %>	As<%= stru %>: as<%= stru %>,
 <% end %>
 }
@@ -99,7 +99,7 @@ var <%= bytesex[0] %>eDataCaster = DataCaster {
 	AsUint64: func(buf []byte) uint64 { return binary.<%= bytesex %>Endian.Uint64(buf) },
   <%
     Ctypes[:Struct].each_key do |s|
-      stru = typemap s
+      stru = structname s
   %>	As<%= stru %>: func(buf []byte) *<%= stru %> { return as<%= stru %>Bytesex(buf, binary.<%= bytesex %>Endian) },
   <% end %>
 }
@@ -113,14 +113,14 @@ func Parse<%= dir %>(datacaster DataCaster, opcode uint32, data []byte) (a []int
   <%
     mmap.each do |c,d|
       d or next
-      d = d.map { |t| typemap t }
-      d[0...-1].include? "[0]byte" and raise "[0]byte type must be trailing"
+      d = d.map { |t| structname(t) || t }
+      d[0...-1].include? "buf" and raise "buf component must be trailing"
     %>	case <%= opcodemap c %>:
       <%
           strings = 0
           d.each do |t|
             case t
-            when "[0]byte"
+            when "buf"
         %>
 		a = append(a, data[pos:])
         <%
