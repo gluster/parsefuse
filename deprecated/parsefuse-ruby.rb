@@ -108,6 +108,7 @@ class FuseMsg
       end
 
       attr_accessor :tag
+      attr_reader :buf
 
       def walk &b
         each { |kv|
@@ -169,6 +170,7 @@ class FuseMsg
       end
 
       def populate buf, dtyp
+        @buf = buf
         # dtyp can be false which indicates that a special handler
         # is needed (the message description syntax is not capable of
         # properly describe the message structure). In that case
