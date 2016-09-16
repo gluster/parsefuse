@@ -432,7 +432,20 @@ func main() {
 			if opname == "" {
 				opname = fmt.Sprintf("OP#%d", inh.Opcode)
 			}
-			body = protogen.ParseR(datacaster, inh.Opcode, buf[insize:])
+			switch inh.Opcode {
+			case protogen.BATCH_FORGET:
+				offset := insize
+				fbfi := datacaster.AsBatchForgetIn(buf[offset:])
+				body = make([]interface{}, fbfi.Count+1)
+				body[0] = *fbfi
+				offset += int(unsafe.Sizeof(protogen.BatchForgetIn{}))
+				for i := 1; i <= int(fbfi.Count); i++ {
+					body[i] = *datacaster.AsForgetOne(buf[offset:])
+					offset += int(unsafe.Sizeof(protogen.ForgetOne{}))
+				}
+			default:
+				body = protogen.ParseR(datacaster, inh.Opcode, buf[insize:])
+			}
 			formatter(*lim, meta, opname, *inh, body)
 			// special handling for some ops
 			switch inh.Opcode {
@@ -444,7 +457,7 @@ func main() {
 				} else {
 					umap[inh.Unique] = int(inh.Opcode)
 				}
-			case protogen.FORGET:
+			case protogen.FORGET, protogen.BATCH_FORGET:
 				// forget FORGET, as it entails no response
 			default:
 				umap[inh.Unique] = int(inh.Opcode)

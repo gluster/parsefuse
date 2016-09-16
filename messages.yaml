@@ -9,6 +9,9 @@
         "FUSE_CREATE":        ["fuse_create_in", "string"],
         "FUSE_FLUSH":         ["fuse_flush_in"],
         "FUSE_FORGET":        ["fuse_forget_in"],
+        # informal description:
+        # "FUSE_BATCH_FORGET":  ["fuse_batch_forget_in", "fuse_forget_in", ...],
+        "FUSE_BATCH_FORGET":  false,
         "FUSE_FSYNCDIR":      ["fuse_fsync_in"],
         "FUSE_FSYNC":         ["fuse_fsync_in"],
         # this was pre-7.9
@@ -48,6 +51,7 @@
         "FUSE_CREATE":        ["fuse_entry_out", "fuse_open_out"],
         "FUSE_FLUSH":         [],
         "FUSE_FORGET":        null,
+        "FUSE_BATCH_FORGET":  null,
         "FUSE_FSYNC":         [],
         "FUSE_FSYNCDIR":      [],
         "FUSE_GETATTR":       ["fuse_attr_out"],
