@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"flag"
@@ -331,7 +332,20 @@ func main() {
 	bytesexspec := flag.String("bytesex", "native", "endianness of data")
 	fopath := flag.String("o", "-", "output file")
 	dumpfmt := flag.Float64("dumpformat", 1, "version of dump format")
+	showproto := flag.Bool("showproto", false, "display protocol header compiled against")
+	showmessages := flag.Bool("showmessages", false, "display message definitions compiled against")
 	flag.Parse()
+
+	if *showproto {
+		protoh, _ := base64.StdEncoding.DecodeString(protogen.ProtoSourceBase64)
+		fmt.Printf("%s", protoh)
+		return
+	}
+	if *showmessages {
+		msgs, _ := base64.StdEncoding.DecodeString(protogen.MessagesSourceBase64)
+		fmt.Printf("%s", msgs)
+		return
+	}
 
 	var fi *os.File
 	var err error

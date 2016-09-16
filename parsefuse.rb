@@ -12,14 +12,17 @@ class FuseMsg
   Msgmap = {}
   Messages = {}
   MsgBodies = {} ## some default entries added later
+  Source = {}
 
   def self.import_proto_data ch, compat: false
     Ctypes.clear
     Messages.clear
+    data = IO.read ch
+    Source[:proto] = data
     # CAST can't handle macros, we have to strip them
     skip = false
     ca = []
-    open(ch).each {|l|
+    data.each_line {|l|
       if l =~ /^\s*#/
         skip = true
         l =~ /VERSION.*\s(\d+)$/ and FuseVersion << Integer($1)
@@ -59,14 +62,17 @@ class FuseMsg
 
   def self.import_proto_messages ty
     Msgmap.clear
-    Msgmap.merge! case ty
+    mmap,src = case ty
     when Hash
-      ty
+      [ty, ty.to_yaml]
     when String
-      YAML.load_file ty
+      src = IO.read ty
+      [YAML.load(src), src]
     else
       raise TypeError, "cannot load message map from this"
     end
+    Msgmap.merge! mmap
+    Source[:messages] = src
     nil
   end
 

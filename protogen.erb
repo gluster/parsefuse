@@ -1,3 +1,5 @@
+<% require 'base64' %>
+
 package protogen
 
 import (
@@ -44,6 +46,10 @@ end
 %>
 )
 
+const(
+	ProtoSourceBase64 = `<%= Base64.encode64 Source[:proto] %>`
+        MessagesSourceBase64 = `<%= Base64.encode64 Source[:messages] %>`
+)
 
 var FuseOpnames = [...]string{
 <%
