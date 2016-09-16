@@ -48,6 +48,6 @@ if __FILE__ == $0
     op.on('-p', '--proto_head F') { |v| protoh = v }
     op.on('-m', '--msgdef F') { |v| msgy = v }
   end.parse!
-  FuseMsg.import_proto protoh, msgy
+  FuseMsg.import_proto protoh, msgy, compat: true
   FuseMsg::Go.makeerb STDIN.read, $>
 end

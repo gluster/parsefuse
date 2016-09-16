@@ -34,6 +34,14 @@ Ctypes[:Enum].each do |e,a|
   end
 end
 %>
+<%
+%W[READDIRPLUS BATCH_FORGET].each do |n|
+  unless Ctypes[:Enum]["fuse_opcode"].transpose[0].include? "FUSE_#{n}"
+%>	<%= n %> uint32 = 0 // unused opcode as stub value
+<%
+  end
+end
+%>
 )
 
 

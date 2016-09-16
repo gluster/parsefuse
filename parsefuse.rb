@@ -13,7 +13,7 @@ class FuseMsg
   Messages = {}
   MsgBodies = {} ## some default entries added later
 
-  def self.import_proto_data ch
+  def self.import_proto_data ch, compat: false
     Ctypes.clear
     Messages.clear
     # CAST can't handle macros, we have to strip them
@@ -49,6 +49,10 @@ class FuseMsg
         end
       }
     }
+    if compat
+      Ctypes[:Struct]["fuse_batch_forget_in"] ||= [%w[uint64_t count]]
+      Ctypes[:Struct]["fuse_forget_one"] ||= []
+    end
     Ctypes[:Enum]["fuse_opcode"].each {|o,n| Messages[n] = o }
     nil
   end
@@ -66,8 +70,8 @@ class FuseMsg
     nil
   end
 
-  def self.import_proto ch, ty
-    import_proto_data ch
+  def self.import_proto ch, ty, kw={}
+    import_proto_data ch, kw
     import_proto_messages ty
     nil
   end
