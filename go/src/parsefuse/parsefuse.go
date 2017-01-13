@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -38,6 +39,8 @@ func formatFmt_i(w *os.File, lim int, a ...interface{}) {
 				t = t[:lim]
 			}
 			_, err = fmt.Fprintf(w, "%q%s ", t, tail)
+		case time.Time:
+			_, err = fmt.Fprintf(w, "%s ", t.Format(time.RFC3339Nano))
 		default:
 			_, err = fmt.Fprintf(w, "%+v ", t)
 		}
@@ -241,13 +244,11 @@ type FUSEMsgReader20 struct {
 	*FUSEMsgReader10
 }
 
-type Time [2]uint64
-
 func (fmr *FUSEMsgReader20) readmsg() (dir byte, meta []interface{}, buf []byte) {
 	dir, meta, buf = fmr.FUSEMsgReader10.readmsg()
 	if len(buf) >= sizeu32 + sizeu64 + sizeu32 {
-		meta = []interface{} { Time{datacaster.AsUint64(buf[sizeu32:]),
-			   uint64(datacaster.AsUint32(buf[sizeu32+sizeu64:]))} }
+		meta = []interface{} { time.Unix(int64(datacaster.AsUint64(buf[sizeu32:])),
+			   int64(datacaster.AsUint32(buf[sizeu32+sizeu64:]))) }
 	}
 	if len(buf) > sizeu32 + sizeu64 + sizeu32 {
 		meta = append(meta, buf[sizeu32 + sizeu64 + sizeu32:])
