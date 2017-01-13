@@ -176,7 +176,14 @@ func (fr *FUSEReader) extend(n int) {
 //
 // leadup specifies the offset of the integer which specifies the size of the
 // particular packet.
-func (fr *FUSEReader) read(leadup int) []byte {
+//
+// If counting is true, then the first integer in the data
+// is tried to be interpreted as item count rather than
+// message length (values less than 16 are accepted as item
+// count). If it's an item count, then don't try to read behind it,
+// we expect the caller to make subsequest read() calls to read
+// in said number of items.
+func (fr *FUSEReader) read(leadup int, counting bool) []byte {
 	fresh := len(fr.buf) - fr.off
 	if
 	// no unconsumed data, we can rewind for free
@@ -197,15 +204,21 @@ func (fr *FUSEReader) read(leadup int) []byte {
 		fresh = len(fr.buf) - fr.off
 	}
 
-	mlen := leadup + int(datacaster.AsUint32(fr.buf[fr.off+leadup:]))
-	if fr.off+mlen > cap(fr.buf) {
-		fr.rewind()
-		if mlen > cap(fr.buf) {
-			fr.extend(mlen)
+	measure := int(datacaster.AsUint32(fr.buf[fr.off+leadup:]))
+	mlen := leadup
+	if counting && measure < 16 {
+		mlen += sizeu32
+	} else {
+		mlen += measure
+		if fr.off+mlen > cap(fr.buf) {
+			fr.rewind()
+			if mlen > cap(fr.buf) {
+				fr.extend(mlen)
+			}
 		}
-	}
-	if fresh < mlen && !fr.rawread(mlen-fresh) {
-		shortread()
+		if fresh < mlen && !fr.rawread(mlen-fresh) {
+			shortread()
+		}
 	}
 
 	buf := fr.buf[fr.off:][:mlen]
@@ -231,29 +244,78 @@ type FUSEMsgReader10 struct {
 }
 
 func (fmr *FUSEMsgReader10) readmsg() (dir byte, meta []interface{}, buf []byte) {
-	buf = fmr.read(1)
+	buf = fmr.read(1, false)
 	if buf == nil {
 		return
 	}
+
 	dir, buf = buf[0], buf[1:]
 	return
 }
 
 
 type FUSEMsgReader20 struct {
-	*FUSEMsgReader10
+	*FUSEReader
 }
 
 func (fmr *FUSEMsgReader20) readmsg() (dir byte, meta []interface{}, buf []byte) {
-	dir, meta, buf = fmr.FUSEMsgReader10.readmsg()
-	if len(buf) >= sizeu32 + sizeu64 + sizeu32 {
-		meta = []interface{} { time.Unix(int64(datacaster.AsUint64(buf[sizeu32:])),
-			   int64(datacaster.AsUint32(buf[sizeu32+sizeu64:]))) }
+	buf = fmr.read(1, true)
+	if buf == nil {
+		return
 	}
-	if len(buf) > sizeu32 + sizeu64 + sizeu32 {
-		meta = append(meta, buf[sizeu32 + sizeu64 + sizeu32:])
+	dir = buf[0]
+
+	itemcount := int(datacaster.AsUint32(buf[1:]))
+	if itemcount >= 16 {
+		// Values from 16 up are not regarded
+		// as a counter of items. In this case
+		// we supppose there is just one item,
+		// the actual FUSE payload and the counter
+		// byte is already a part of the payload.
+		// (This is a fusedump v1 fallback.)
+		buf = buf[1:]
+		return
 	}
-	buf = fmr.read(0)
+	if itemcount == 0 {
+		return
+	}
+	if itemcount >= 2 {
+		// The items except for the last one
+		// are the metadata.
+		meta = make([]interface{}, itemcount-1)
+
+		buf = fmr.read(0, false)
+		if buf == nil {
+			shortread()
+		}
+		// The first metadata item is expected to carry a timestamp
+		// and be of the format {len u32, sec u64, nsec u32}.
+		if len(buf) == sizeu32+sizeu64+sizeu32 {
+			meta[0] = time.Unix(int64(datacaster.AsUint64(buf[sizeu32:])),
+				int64(datacaster.AsUint32(buf[sizeu32+sizeu64:])))
+		} else {
+			// The above expectation fails due to a size mismatch.
+			// This is not regular, but we don't make a
+			// fuss about it.
+			meta[0] = buf[sizeu32:]
+		}
+
+		// Reading the remaining metadata items.
+		for i, _ := range meta[1:] {
+			buf = fmr.read(0, false)
+			if buf == nil {
+				shortread()
+			}
+			meta[i+1] = buf[sizeu32:]
+		}
+	}
+
+	// Reading the payload.
+	buf = fmr.read(0, false)
+	if buf == nil {
+		shortread()
+	}
+
 	return
 }
 
@@ -332,7 +394,7 @@ func main() {
 	format := flag.String("format", "fmt", "output format (fmt, json or null)")
 	bytesexspec := flag.String("bytesex", "native", "endianness of data")
 	fopath := flag.String("o", "-", "output file")
-	dumpfmt := flag.Float64("dumpformat", 1, "version of dump format")
+	dumpfmt := flag.Float64("dumpformat", 2, "version of dump format")
 	showproto := flag.Bool("showproto", false, "display protocol header compiled against")
 	showmessages := flag.Bool("showmessages", false, "display message definitions compiled against")
 	flag.Parse()
@@ -365,12 +427,11 @@ func main() {
 
 	var frm FUSEMsgReader
 	fr := NewFUSEReader(fi)
-	frm10 := &FUSEMsgReader10{ fr }
 	switch *dumpfmt {
 	case 1.0:
-		frm = frm10
+		frm = &FUSEMsgReader10{fr}
 	case 2.0:
-		frm = &FUSEMsgReader20{ frm10 }
+		frm = &FUSEMsgReader20{fr}
 	default:
 		log.Fatalf("unknown fusedump format version %.2f", *dumpfmt)
 	}
