@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 
 require 'stringio'
-require 'parsefuse'
+require 'parsefuse/import'
 
 class Object
 

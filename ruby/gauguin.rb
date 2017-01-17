@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 
 require 'erb'
-require 'parsefuse'
+require 'parsefuse/import'
 
 class FuseMsg
 
