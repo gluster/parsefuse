@@ -174,8 +174,8 @@ func (fr *FUSEReader) extend(n int) {
 // reader's buffer is adjusted to mark the region of read data, and reader's
 // offset is adjusted to the end of the message.
 //
-// leadup specifies the offset of the integer which specifies the size of the
-// particular packet.
+// If get_direction is true, we start with reading a byte indicating direction of
+// the message (read ("R") or write ("W")). We err out for any other value.
 //
 // If counting is true, then the first integer in the data
 // is tried to be interpreted as item count rather than
@@ -183,7 +183,13 @@ func (fr *FUSEReader) extend(n int) {
 // count). If it's an item count, then don't try to read behind it,
 // we expect the caller to make subsequest read() calls to read
 // in said number of items.
-func (fr *FUSEReader) read(leadup int, counting bool) []byte {
+func (fr *FUSEReader) read(get_direction bool, counting bool) (
+	buf []byte, dir byte) {
+
+	leadup := 0
+	if get_direction {
+		leadup = 1
+	}
 	fresh := len(fr.buf) - fr.off
 	if
 	// no unconsumed data, we can rewind for free
@@ -196,12 +202,20 @@ func (fr *FUSEReader) read(leadup int, counting bool) []byte {
 	if fresh < leadup+sizeu32 {
 		if !fr.rawread(leadup+sizeu32 - fresh) {
 			if fresh == 0 {
-				return nil
+				return
 			} else {
 				shortread()
 			}
 		}
 		fresh = len(fr.buf) - fr.off
+	}
+
+	if get_direction {
+		dir = fr.buf[fr.off]
+		if dir != 'R' && dir != 'W' {
+			log.Fatalf("Read: unknown direction byte: %q",
+				[]byte{dir})
+		}
 	}
 
 	measure := int(datacaster.AsUint32(fr.buf[fr.off+leadup:]))
@@ -221,9 +235,9 @@ func (fr *FUSEReader) read(leadup int, counting bool) []byte {
 		}
 	}
 
-	buf := fr.buf[fr.off:][:mlen]
+	buf = fr.buf[fr.off:][:mlen]
 	fr.off += mlen
-	return buf
+	return
 }
 
 // FUSEMsgReader is an interface that is to be implemented
@@ -244,12 +258,7 @@ type FUSEMsgReader10 struct {
 }
 
 func (fmr *FUSEMsgReader10) readmsg() (dir byte, meta []interface{}, buf []byte) {
-	buf = fmr.read(1, false)
-	if buf == nil {
-		return
-	}
-
-	dir, buf = buf[0], buf[1:]
+	buf, dir = fmr.read(true, false)
 	return
 }
 
@@ -259,11 +268,10 @@ type FUSEMsgReader20 struct {
 }
 
 func (fmr *FUSEMsgReader20) readmsg() (dir byte, meta []interface{}, buf []byte) {
-	buf = fmr.read(1, true)
+	buf, dir = fmr.read(true, true)
 	if buf == nil {
 		return
 	}
-	dir = buf[0]
 
 	itemcount := int(datacaster.AsUint32(buf[1:]))
 	if itemcount >= 16 {
@@ -284,7 +292,7 @@ func (fmr *FUSEMsgReader20) readmsg() (dir byte, meta []interface{}, buf []byte)
 		// are the metadata.
 		meta = make([]interface{}, itemcount-1)
 
-		buf = fmr.read(0, false)
+		buf, _ = fmr.read(false, false)
 		if buf == nil {
 			shortread()
 		}
@@ -302,7 +310,7 @@ func (fmr *FUSEMsgReader20) readmsg() (dir byte, meta []interface{}, buf []byte)
 
 		// Reading the remaining metadata items.
 		for i, _ := range meta[1:] {
-			buf = fmr.read(0, false)
+			buf, _ = fmr.read(false, false)
 			if buf == nil {
 				shortread()
 			}
@@ -311,7 +319,7 @@ func (fmr *FUSEMsgReader20) readmsg() (dir byte, meta []interface{}, buf []byte)
 	}
 
 	// Reading the payload.
-	buf = fmr.read(0, false)
+	buf, _ = fmr.read(false, false)
 	if buf == nil {
 		shortread()
 	}
