@@ -107,7 +107,7 @@ class FuseMsg
         super [key, elem]
       end
 
-      attr_accessor :tag
+      attr_accessor :tag, :meta
       attr_reader :buf
 
       def walk &b
@@ -257,7 +257,7 @@ class FuseMsg
 
   attr_accessor :in_head, :out_head, :in_body, :out_body
 
-  def self.read_stream data
+  def self.read_stream data, meta_size=nil
     data.respond_to? :read or data = StringIO.new(data)
     q = {}
     head_get = proc { |t|
@@ -269,9 +269,11 @@ class FuseMsg
     _FORGET = FuseMsg::Messages.invert["FUSE_FORGET"]
     loop do
       dir = data.read 1
+      meta_size and meta = data.read(meta_size)
       yield case dir
       when 'R'
         in_head, hsiz = head_get[:fuse_in_header]
+        meta_size and in_head.meta = meta
         in_head.tag = Messages[in_head.opcode] || "??"
         mbcls = MsgBodies[['R', Messages[in_head.opcode]]]
         mbcls ||= MsgBodyCore
@@ -282,6 +284,7 @@ class FuseMsg
         [in_head, msg.in_body]
       when 'W'
         out_head, hsiz = head_get[:fuse_out_header]
+        meta_size and out_head.meta = meta
         msg = q.delete(out_head.unique) || new
         msg.out_head = out_head
         mbcls = msg.in_head ? MsgBodies[['W', Messages[msg.in_head.opcode]]] : MsgBodyCore
@@ -307,14 +310,16 @@ if __FILE__ == $0
   limit = nil
   protoh = nil
   msgy = nil
+  meta_size = nil
   OptionParser.new do |op|
     op.on('-l', '--limit N', Integer) { |v| limit = v }
-    op.on('-p', '--proto_head F') { |v| protoh = v }
+    op.on('-p', '--proto-head F') { |v| protoh = v }
     op.on('-m', '--msgdef F') { |v| msgy = v }
+    op.on('--meta-size N', Integer) { |v| meta_size = v }
   end.parse!
   FuseMsg.import_proto protoh, msgy
   FuseMsg.generate_bodyclasses
-  FuseMsg.read_stream($<) { |m|
+  FuseMsg.read_stream($<, meta_size) { |m|
     puts m.map{|mp| mp.inspect limit}.join(" ")
   }
 end
