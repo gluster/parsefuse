@@ -109,7 +109,7 @@ func shortread() {
 	log.Fatal("Read: short read")
 }
 
-const(
+const (
 	sizeu32 = int(unsafe.Sizeof(uint32(0)))
 	sizeu64 = int(unsafe.Sizeof(uint64(0)))
 )
@@ -200,7 +200,7 @@ func (fr *FUSEReader) read(get_direction bool, counting bool) (
 		fr.rewind()
 	}
 	if fresh < leadup+sizeu32 {
-		if !fr.rawread(leadup+sizeu32 - fresh) {
+		if !fr.rawread(leadup + sizeu32 - fresh) {
 			if fresh == 0 {
 				return
 			} else {
@@ -252,7 +252,6 @@ type FUSEMsgReader interface {
 	readmsg() (dir byte, meta []interface{}, buf []byte)
 }
 
-
 type FUSEMsgReader10 struct {
 	*FUSEReader
 }
@@ -261,7 +260,6 @@ func (fmr *FUSEMsgReader10) readmsg() (dir byte, meta []interface{}, buf []byte)
 	buf, dir = fmr.read(true, false)
 	return
 }
-
 
 type FUSEMsgReader20 struct {
 	*FUSEReader
@@ -327,13 +325,12 @@ func (fmr *FUSEMsgReader20) readmsg() (dir byte, meta []interface{}, buf []byte)
 	return
 }
 
-
 //
 // special parsing support routines
 //
 
 const (
-	direntSize = int(unsafe.Offsetof(protogen.Dirent{}.Name))
+	direntSize   = int(unsafe.Offsetof(protogen.Dirent{}.Name))
 	entryoutSize = int(unsafe.Sizeof(protogen.EntryOut{}))
 )
 
@@ -342,7 +339,7 @@ func parsedir(data []byte, opcode uint32) ([][]interface{}, []byte) {
 	if opcode == protogen.READDIRPLUS {
 		plussiz = entryoutSize
 	}
-	dea := make([][]interface{}, 0, len(data)/(plussiz + direntSize+10))
+	dea := make([][]interface{}, 0, len(data)/(plussiz+direntSize+10))
 
 	for len(data) >= direntSize {
 		nmemb := 2
@@ -384,6 +381,7 @@ FUSE version: %d.%d
 %s [options] [<fusedump>]
 options:
 `
+
 var datacaster protogen.DataCaster = protogen.NativeDataCaster
 
 func main() {
