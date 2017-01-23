@@ -41,8 +41,6 @@ func formatFmt_i(w *os.File, lim int, a ...interface{}) {
 				t = t[:lim]
 			}
 			_, err = fmt.Fprintf(w, "%q%s ", t, tail)
-		case time.Time:
-			_, err = fmt.Fprintf(w, "%s ", t.Format(time.RFC3339Nano))
 		default:
 			_, err = fmt.Fprintf(w, "%+v ", t)
 		}
@@ -312,7 +310,8 @@ func (fmr *FUSEMsgReader20) readmsg() (dir byte, meta []interface{}, buf []byte)
 		// and be of the format {len u32, sec u64, nsec u32}.
 		if len(buf) == sizeu32+sizeu64+sizeu32 {
 			meta[0] = time.Unix(int64(datacaster.AsUint64(buf[sizeu32:])),
-				int64(datacaster.AsUint32(buf[sizeu32+sizeu64:])))
+				int64(datacaster.AsUint32(buf[sizeu32+sizeu64:]))).
+				Format(time.RFC3339Nano)
 		} else {
 			// The above expectation fails due to a size mismatch.
 			// This is not regular, but we don't make a
