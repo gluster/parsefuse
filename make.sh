@@ -8,4 +8,5 @@ mkdir -p "$protogendir"
 
 ruby -Iruby ruby/gauguin.rb -m messages.yaml $* < protogen.erb | gofmt > "$protogendir/protogen.go"
 
+go get github.com/ugorji/go/codec
 go install parsefuse

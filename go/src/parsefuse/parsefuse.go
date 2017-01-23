@@ -16,6 +16,8 @@ import (
 	"unsafe"
 )
 
+import "github.com/ugorji/go/codec"
+
 import (
 	"parsefuse/protogen"
 )
@@ -84,6 +86,18 @@ func formatJson(jw *json.Encoder, lim int, a ...interface{}) {
 	err := jw.Encode(jr)
 	if err != nil {
 		log.Fatal("json.Encode: ", err)
+	}
+}
+
+func formatCodec(cw *codec.Encoder, lim int, a ...interface{}) {
+	var jr jrec
+	if lim > 0 {
+		jr.Truncated = truncate(lim, a)
+	}
+	jr.Msg = a
+	err := cw.Encode(jr)
+	if err != nil {
+		log.Fatal("codec.Encoder: ", err)
 	}
 }
 
@@ -397,7 +411,7 @@ func main() {
 		flag.PrintDefaults()
 	}
 	lim := flag.Int("lim", 512, "truncate output data to this size")
-	format := flag.String("format", "fmt", "output format (fmt, json or null)")
+	format := flag.String("format", "fmt", "output format (fmt, json, msgpack or null)")
 	bytesexspec := flag.String("bytesex", "native", "endianness of data")
 	fopath := flag.String("o", "-", "output file")
 	dumpfmt := flag.Float64("dumpformat", 2, "version of dump format")
@@ -485,6 +499,11 @@ func main() {
 		jw := json.NewEncoder(fo)
 		formatter = func(lim int, a ...interface{}) {
 			formatJson(jw, lim, a...)
+		}
+	case "msgpack":
+		cw := codec.NewEncoder(fo, &codec.MsgpackHandle{})
+		formatter = func(lim int, a ...interface{}) {
+			formatCodec(cw, lim, a...)
 		}
 	case "null":
 		formatter = func(lim int, a ...interface{}) {
