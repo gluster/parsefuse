@@ -10,7 +10,7 @@
         "FUSE_FLUSH":         ["fuse_flush_in"],
         "FUSE_FORGET":        ["fuse_forget_in"],
         # informal description:
-        # "FUSE_BATCH_FORGET":  ["fuse_batch_forget_in", "fuse_forget_in", ...],
+        # "FUSE_BATCH_FORGET":  ["fuse_batch_forget_in", "fuse_forget_one", ...],
         "FUSE_BATCH_FORGET":  false,
         "FUSE_FSYNCDIR":      ["fuse_fsync_in"],
         "FUSE_FSYNC":         ["fuse_fsync_in"],
@@ -78,7 +78,7 @@
         # "FUSE_READDIR":     ["fuse_dirent", ...]
         "FUSE_READDIR":       false,
         # informal description:
-        # "FUSE_READDIR":     [["fuse_entry_out","fuse_dirent"], ...]
+        # "FUSE_READDIRPLUS": [["fuse_entry_out","fuse_dirent"], ...]
         "FUSE_READDIRPLUS":   false,
         "FUSE_READLINK":      ["buf"],
         "FUSE_RELEASE":       [],
