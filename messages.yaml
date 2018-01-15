@@ -93,6 +93,17 @@
         "FUSE_STATFS":        ["fuse_statfs_out"],
         "FUSE_SYMLINK":       ["fuse_entry_out"],
         "FUSE_UNLINK":        [],
-        "FUSE_WRITE":         ["fuse_write_out"]
+        "FUSE_WRITE":         ["fuse_write_out"],
+        "FUSE_NOTIFY_POLL":   ["fuse_notify_poll_wakeup_out"],
+        "FUSE_NOTIFY_INVAL_INODE": ["fuse_notify_inval_inode_out"],
+        # this is not entirely correct, instead of "string" there is a
+        # len-capped buf, with a trailing byte (that's discarded by
+        # the kernel). We practically assume that the trailing byte is zero
+        # ('till we find a fuse server that does it differently).
+        "FUSE_NOTIFY_INVAL_ENTRY": ["fuse_notify_inval_entry_out", "string"],
+        "FUSE_NOTIFY_STORE":  ["fuse_notify_store_out"],
+        "FUSE_NOTIFY_RETRIEVE": ["fuse_notify_retrieve_out"],
+        # same concern as with FUSE_NOTIFY_INVAL_ENTRY
+        "FUSE_NOTIFY_DELETE": ["fuse_notify_delete_out", "string"]
     }
 }

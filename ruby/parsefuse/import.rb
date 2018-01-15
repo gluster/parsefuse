@@ -11,12 +11,14 @@ class FuseMsg
   Ctypes = {}
   Msgmap = {}
   Messages = {}
+  Notifications = {}
   MsgBodies = {} ## some default entries added later
   Source = {}
 
   def self.import_proto_data ch, compat: false
     Ctypes.clear
     Messages.clear
+    Notifications.clear
     data = IO.read ch
     Source[:proto] = data
     # CAST can't handle macros, we have to strip them
@@ -56,7 +58,10 @@ class FuseMsg
       Ctypes[:Struct]["fuse_batch_forget_in"] ||= [%w[uint64_t count]]
       Ctypes[:Struct]["fuse_forget_one"] ||= []
     end
-    Ctypes[:Enum]["fuse_opcode"].each {|o,n| Messages[n] = o }
+    [[Messages, "fuse_opcode"],
+     [Notifications, "fuse_notify_code"]].each { |k,v|
+      Ctypes[:Enum][v].each {|o,n| k[n] = o }
+    }
     nil
   end
 

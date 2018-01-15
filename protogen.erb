@@ -51,10 +51,13 @@ const(
         MessagesSourceBase64 = `<%= Base64.encode64 Source[:messages] %>`
 )
 
-var FuseOpnames = [...]string{
 <%
-used = Set.new [nil]
 Ctypes[:Enum].each do |e,a|
+  ename = e.gsub(/\Afuse_?|_?code\Z/, "").capitalize
+%>
+var Fuse<%= ename %>names = [...]string{
+<%
+  used = Set.new [nil]
   a.each do |n,v|
     used.include? v and next
     n = opcodemap n
@@ -62,9 +65,11 @@ Ctypes[:Enum].each do |e,a|
 <%
     used << v
   end
-end
 %>
 }
+<%
+end
+%>
 
 <%
 Ctypes[:Struct].each do |name, desc|
@@ -119,13 +124,18 @@ var <%= bytesex[0] %>eDataCaster = DataCaster {
 }
 <% end %>
 
-<% Msgmap.each do |dir, mmap| %>
-func Parse<%= dir %>(datacaster DataCaster, opcode uint32, data []byte) (a []interface{}) {
+<%
+%w[Message Notification].each do |k|
+  Msgmap.each do |dir, mmap|
+    k == "Notification" and mmap.keys - Notifications.values == mmap.keys and next
+%>
+func Parse<%= "#{k}#{dir}" %>(datacaster DataCaster, opcode uint32, data []byte) (a []interface{}) {
 	pos := 0
 	a = make([]interface{}, 0, 2)
 	switch opcode {
   <%
     mmap.each do |c,d|
+      [Notifications.values.include?(c), k == "Notification"].uniq.size == 1 or next
       d or next
       d = d.map { |t| structname(t) || t }
       d[0...-1].include? "buf" and raise "buf component must be trailing"
@@ -167,4 +177,7 @@ func Parse<%= dir %>(datacaster DataCaster, opcode uint32, data []byte) (a []int
 	}
 	return
 }
-<% end %>
+<%
+  end
+end
+%>

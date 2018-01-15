@@ -347,10 +347,16 @@ class FuseMsg
       when 'W'
         out_head, hsiz = head_get[:fuse_out_header]
         meta_size and out_head.meta = meta
-        msg = q.delete(out_head.unique) || new
-        msg.out_head = out_head
-        mbcls = msg.in_head ? MsgBodies[['W', Messages[msg.in_head.opcode]]] : MsgBodyCore
+        if out_head.unique.zero?
+          msg = new
+          mbcls = MsgBodies[['W', Notifications[out_head.error]]]
+          out_head.tag = Notifications[out_head.error] || "??"
+        else
+          msg = q.delete(out_head.unique) || new
+          mbcls = msg.in_head ? MsgBodies[['W', Messages[msg.in_head.opcode]]] : MsgBodyCore
+        end
         mbcls ||= MsgBodyCore
+        msg.out_head = out_head
         msg.out_body = mbcls.new data.read(out_head.len - hsiz), msg
         [out_head, msg.out_body]
       when nil

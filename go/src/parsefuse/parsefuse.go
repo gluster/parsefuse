@@ -544,7 +544,7 @@ func main() {
 					offset += int(unsafe.Sizeof(protogen.ForgetOne{}))
 				}
 			default:
-				body = protogen.ParseR(datacaster, inh.Opcode, buf[insize:])
+				body = protogen.ParseMessageR(datacaster, inh.Opcode, buf[insize:])
 			}
 			formatter(*lim, meta, opname, *inh, body)
 			// special handling for some ops
@@ -565,7 +565,18 @@ func main() {
 		case 'W':
 			ouh := datacaster.AsOutHeader(buf)
 			buf = buf[outsize:]
-			if opcode, ok := umap[ouh.Unique]; ok {
+			if ouh.Unique == 0 {
+				opcode := ouh.Error
+				notifname := ""
+				if int(opcode) < len(protogen.FuseNotifynames) {
+					notifname = protogen.FuseNotifynames[opcode]
+				}
+				if notifname == "" {
+					notifname = fmt.Sprintf("NOTIFY#%d", opcode)
+				}
+				body = protogen.ParseNotificationW(datacaster, uint32(opcode), buf)
+				formatter(*lim, meta, notifname, *ouh, body)
+			} else if opcode, ok := umap[ouh.Unique]; ok {
 				delete(umap, ouh.Unique)
 				if opcode < 0 {
 					if len(buf) == int(unsafe.Sizeof(protogen.GetxattrOut{})) {
@@ -592,7 +603,7 @@ func main() {
 						nama := strings.Split(string(buf), "\x00")
 						body = []interface{}{nama[:len(nama)-1]}
 					default:
-						body = protogen.ParseW(datacaster, uint32(opcode), buf)
+						body = protogen.ParseMessageW(datacaster, uint32(opcode), buf)
 					}
 				}
 				formatter(*lim, meta, *ouh, body)
