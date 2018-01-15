@@ -121,14 +121,14 @@ class FuseMsg
         }
       end
 
-      def deploy
+      def deploy!
         walk { |kv|
           tnam = kv[1]
           sr = Ctypes[:Struct][tnam]
           next unless sr
           sm = Msgnode.new tnam
           sr.each { |typ, fld| sm.<< typ, fld }
-          kv[1] = sm.deploy
+          kv[1] = sm.deploy!
         }
         self
       end
@@ -169,7 +169,7 @@ class FuseMsg
         v
       end
 
-      def populate buf, dtyp
+      def populate! buf, dtyp
         @buf = buf
         # dtyp can be false which indicates that a special handler
         # is needed (the message description syntax is not capable of
@@ -177,7 +177,7 @@ class FuseMsg
         # we just fall back to the ["buf"] description (ie. handling it
         # just as an unstructured blob).
         (dtyp || ["buf"]).each { |t| self.<< *t }
-        deploy
+        deploy!
         leaftypes = []
         walk { |kv| leaftypes << kv[1] }
         leafvalues = buf.unpack leaftypes.map { |t| Zipcodes[t] }.join
@@ -188,7 +188,7 @@ class FuseMsg
 
     def initialize buf, msg
       super
-      @tree = Msgnode.new.populate @buf, Msgmap[cvar :@direction][cvar :@op]
+      @tree = Msgnode.new.populate! @buf, Msgmap[cvar :@direction][cvar :@op]
     end
 
     attr_reader :tree
@@ -225,7 +225,7 @@ class FuseMsg
     def initialize *a
       super
       if (mb = @msg.in_body) and mb[0][1][:size].zero?
-        @tree = MsgBodyGeneric::Msgnode.new.populate @buf, ["fuse_getxattr_out"]
+        @tree = MsgBodyGeneric::Msgnode.new.populate! @buf, ["fuse_getxattr_out"]
         @treeadjusted = true
       end
     end
@@ -263,7 +263,7 @@ class FuseMsg
     head_get = proc { |t|
       ts = t.to_s
       hsiz = sizeof(ts)
-      h = MsgBodyGeneric::Msgnode.new(t).populate data.read(hsiz), Ctypes[:Struct][ts]
+      h = MsgBodyGeneric::Msgnode.new(t).populate! data.read(hsiz), Ctypes[:Struct][ts]
       [h, hsiz]
     }
     _FORGET = FuseMsg::Messages.invert["FUSE_FORGET"]
