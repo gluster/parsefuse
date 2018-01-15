@@ -245,8 +245,64 @@ class FuseMsg
 
   }
 
+  MsgReaddirW = generate_bodyclass 'W', 'FUSE_READDIR'
+  MsgReaddirW.class_eval {
+
+    const_set :Recordsig, %w[fuse_dirent]
+
+    def self.recordsize
+      @recsiz ||= const_get(:Recordsig).map {|t| FuseMsg.sizeof t }.inject(&:+)
+    end
+
+    def self.namelenext nlen
+      nlen + ((8 - nlen&7) & 7)
+    end
+
+    def initialize *a
+      super
+      @tree = MsgBodyGeneric::Msgnode.new
+      buf = @buf
+      while buf.size >= self.class.recordsize
+        rec = MsgBodyGeneric::Msgnode.new.populate! buf,
+                self.class.const_get(:Recordsig)
+        nlen = rec[-1][1].namelen
+        rec << buf[self.class.recordsize..-1][0...nlen]
+        @tree << rec
+        buf = buf[self.class.recordsize+self.class.namelenext(nlen)..-1]
+      end
+    end
+
+  }
+
+  MsgReaddirPlusW = generate_bodyclass 'W', 'FUSE_READDIRPLUS', MsgReaddirW
+  MsgReaddirPlusW.class_eval {
+
+    const_set :Recordsig, %w[fuse_entry_out fuse_dirent]
+
+  }
+
+  MsgBatchForgetR = generate_bodyclass 'R', 'FUSE_BATCH_FORGET'
+  MsgBatchForgetR.class_eval {
+
+    def initialize *a
+      super
+      @tree = MsgBodyGeneric::Msgnode.new.populate! @buf, ["fuse_batch_forget_in"]
+      # #count is a method of Enumerable therefore we have to use key retrieval
+      count = @tree[0][1][:count]
+      off = FuseMsg.sizeof "fuse_batch_forget_in"
+      count.times {
+        @tree << MsgBodyGeneric::Msgnode.new.populate!(@buf[off..-1], ["fuse_forget_one"])
+        off += FuseMsg.sizeof "fuse_forget_one"
+      }
+    end
+
+  }
+
   MsgBodies.merge! ['W', 'FUSE_GETXATTR'] => MsgGetxattrW,
-                   ['W', 'FUSE_LISTXATTR'] => MsgListxattrW
+                   ['W', 'FUSE_LISTXATTR'] => MsgListxattrW,
+                   ['W', 'FUSE_READDIR'] => MsgReaddirW,
+                   ['W', 'FUSE_READDIRPLUS'] => MsgReaddirPlusW,
+                   ['R', 'FUSE_BATCH_FORGET'] => MsgBatchForgetR
 
   def self.sizeof tnam
     @hcac ||= {}
@@ -270,7 +326,9 @@ class FuseMsg
       h = MsgBodyGeneric::Msgnode.new(t).populate! data.read(hsiz), Ctypes[:Struct][ts]
       [h, hsiz]
     }
-    _FORGET = FuseMsg::Messages.invert["FUSE_FORGET"]
+    _FORGET = %w[FUSE_FORGET FUSE_BATCH_FORGET].map {|m|
+      FuseMsg::Messages.invert[m]
+    }
     loop do
       dir = data.read 1
       meta_size and meta = data.read(meta_size)
@@ -284,7 +342,7 @@ class FuseMsg
         msg = new
         msg.in_head = in_head
         msg.in_body = mbcls.new data.read(in_head.len - hsiz), msg
-        q[in_head.unique] = msg unless in_head.opcode == _FORGET
+        q[in_head.unique] = msg unless _FORGET.include? in_head.opcode
         [in_head, msg.in_body]
       when 'W'
         out_head, hsiz = head_get[:fuse_out_header]
