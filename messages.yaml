@@ -44,7 +44,8 @@
         "FUSE_STATFS":        [],
         "FUSE_SYMLINK":       ["string"],
         "FUSE_UNLINK":        ["string"],
-        "FUSE_WRITE":         ["fuse_write_in", "buf"]
+        "FUSE_WRITE":         ["fuse_write_in", "buf"],
+        "CUSE_INIT":          ["cuse_init_in"]
     },
     "W": {
         "FUSE_ACCESS":        [],
@@ -104,6 +105,7 @@
         "FUSE_NOTIFY_STORE":  ["fuse_notify_store_out"],
         "FUSE_NOTIFY_RETRIEVE": ["fuse_notify_retrieve_out"],
         # same concern as with FUSE_NOTIFY_INVAL_ENTRY
-        "FUSE_NOTIFY_DELETE": ["fuse_notify_delete_out", "string"]
+        "FUSE_NOTIFY_DELETE": ["fuse_notify_delete_out", "string"],
+        "CUSE_INIT":          ["cuse_init_out", "buf"]
     }
 }
