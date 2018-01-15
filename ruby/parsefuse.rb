@@ -250,8 +250,12 @@ class FuseMsg
 
   def self.sizeof tnam
     @hcac ||= {}
-    @hcac[tnam] ||= Ctypes[:Struct][tnam].transpose[0].instance_eval { tt = self
-      ([0]*tt.size).pack(tt.map {|t| Zipcodes[t] }.join).size
+    @hcac[tnam] ||= MsgBodyGeneric::Msgnode.new.instance_eval {
+      self << tnam
+      deploy!
+      leaftypes = []
+      walk { |kv| leaftypes << kv[1] }
+      leaftypes.map{0}.pack(leaftypes.map { |t| Zipcodes[t] }.join).size
     }
   end
 
