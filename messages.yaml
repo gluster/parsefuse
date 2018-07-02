@@ -45,6 +45,7 @@
         "FUSE_SYMLINK":       ["string"],
         "FUSE_UNLINK":        ["string"],
         "FUSE_WRITE":         ["fuse_write_in", "buf"],
+        "FUSE_INTERRUPT":     ["fuse_interrupt_in"],
         "CUSE_INIT":          ["cuse_init_in"]
     },
     "W": {
@@ -95,6 +96,10 @@
         "FUSE_SYMLINK":       ["fuse_entry_out"],
         "FUSE_UNLINK":        [],
         "FUSE_WRITE":         ["fuse_write_out"],
+        # can also be like:
+        # "FUSE_INTERRUPT":     null,
+        # ie. response is optional (re-asking for interrupt with errno EAGAIN)
+        "FUSE_INTERRUPT":     [],
         "FUSE_NOTIFY_POLL":   ["fuse_notify_poll_wakeup_out"],
         "FUSE_NOTIFY_INVAL_INODE": ["fuse_notify_inval_inode_out"],
         # this is not entirely correct, instead of "string" there is a
