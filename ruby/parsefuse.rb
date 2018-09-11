@@ -85,7 +85,7 @@ class FuseMsg
 
     def self.inspect_buf buf, limit
       limit ||= PrintLimit
-      limit.zero? && limit = buf.size
+      limit < 0 && limit = buf.size
       buf.size <= limit ? buf.sinsp : buf[0...limit].sinsp + " ... [#{buf.size} bytes]"
     end
 

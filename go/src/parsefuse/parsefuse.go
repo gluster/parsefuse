@@ -36,7 +36,7 @@ func formatFmt_i(w *os.File, lim int, a ...interface{}) {
 			formatFmt_i(w, lim, t...)
 		case []byte:
 			tail := ""
-			if len(t) > lim && lim > 0 {
+			if len(t) > lim && lim >= 0 {
 				tail = fmt.Sprintf("... %d", len(t))
 				t = t[:lim]
 			}
@@ -59,7 +59,7 @@ func truncate(lim int, a []interface{}) (truncated bool) {
 	for i, x := range a {
 		switch t := x.(type) {
 		case []byte:
-			if len(t) > lim {
+			if len(t) >= lim {
 				a[i] = t[:lim]
 				truncated = true
 			}
@@ -77,7 +77,7 @@ type jrec struct {
 
 func formatJson(jw *json.Encoder, lim int, a ...interface{}) {
 	var jr jrec
-	if lim > 0 {
+	if lim >= 0 {
 		jr.Truncated = truncate(lim, a)
 	}
 	jr.Msg = a
@@ -89,7 +89,7 @@ func formatJson(jw *json.Encoder, lim int, a ...interface{}) {
 
 func formatCodec(cw *codec.Encoder, lim int, a ...interface{}) {
 	var jr jrec
-	if lim > 0 {
+	if lim >= 0 {
 		jr.Truncated = truncate(lim, a)
 	}
 	jr.Msg = a
