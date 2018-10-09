@@ -27,6 +27,10 @@ C codebases that implement a FUSE server from scratch; so for example:
 As a thumb of rule, you should use the same header file with
 which the producer of the fusedumps to dissect was built with.
 
+**If you are on a RHEL/CentOS 7 system and want to use parsefuse
+for dumps created by GlusterFs, choose _/usr/include/linux/fuse.h_
+(provided by the kernel-headers package).**
+
 Once you have this, build _parsefuse_ with the following command:
 
 ```sh
