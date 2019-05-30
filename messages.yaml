@@ -42,7 +42,7 @@
         "FUSE_SETLKW":        ["fuse_lk_in"],
         "FUSE_SETXATTR":      ["fuse_setxattr_in", "string", "buf"],
         "FUSE_STATFS":        [],
-        "FUSE_SYMLINK":       ["string"],
+        "FUSE_SYMLINK":       ["string", "string"],
         "FUSE_UNLINK":        ["string"],
         "FUSE_WRITE":         ["fuse_write_in", "buf"],
         "FUSE_INTERRUPT":     ["fuse_interrupt_in"],
