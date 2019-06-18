@@ -450,21 +450,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	var frm FUSEMsgReader
+	var fmr FUSEMsgReader
 	fr := NewFUSEReader(fi)
 	switch *dumpfmt {
 	case 1.0:
-		frm = &FUSEMsgReader10{fr}
+		fmr = &FUSEMsgReader10{fr}
 	case 2.0:
-		frm20 := &FUSEMsgReader20{fr, nil}
+		fmr20 := &FUSEMsgReader20{fr, nil}
 		if *timeoffset != "" {
 			dur, err := time.ParseDuration(*timeoffset)
 			if err != nil {
 				log.Fatalf("invalid duration given as time offset: %s", *timeoffset)
 			}
-			frm20.loc = time.FixedZone("display_TZ", int(dur.Seconds()))
+			fmr20.loc = time.FixedZone("display_TZ", int(dur.Seconds()))
 		}
-		frm = frm20
+		fmr = fmr20
 	default:
 		log.Fatalf("unknown fusedump format version %.2f", *dumpfmt)
 	}
@@ -531,7 +531,7 @@ func main() {
 		var body []interface{}
 		var dir byte
 
-		dir, meta, buf := frm.readmsg()
+		dir, meta, buf := fmr.readmsg()
 		if buf == nil {
 			break
 		}
