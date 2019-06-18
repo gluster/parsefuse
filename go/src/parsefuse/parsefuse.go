@@ -275,6 +275,7 @@ func (fmr *FUSEMsgReader10) readmsg() (dir byte, meta []interface{}, buf []byte)
 
 type FUSEMsgReader20 struct {
 	*FUSEReader
+	loc *time.Location
 }
 
 func (fmr *FUSEMsgReader20) readmsg() (dir byte, meta []interface{}, buf []byte) {
@@ -309,9 +310,12 @@ func (fmr *FUSEMsgReader20) readmsg() (dir byte, meta []interface{}, buf []byte)
 		// The first metadata item is expected to carry a timestamp
 		// and be of the format {len u32, sec u64, nsec u32}.
 		if len(buf) == sizeu32+sizeu64+sizeu32 {
-			meta[0] = time.Unix(int64(datacaster.AsUint64(buf[sizeu32:])),
-				int64(datacaster.AsUint32(buf[sizeu32+sizeu64:]))).
-				Format(time.RFC3339Nano)
+			t := time.Unix(int64(datacaster.AsUint64(buf[sizeu32:])),
+				int64(datacaster.AsUint32(buf[sizeu32+sizeu64:])))
+			if fmr.loc != nil {
+				t = t.In(fmr.loc)
+			}
+			meta[0] = t.Format(time.RFC3339Nano)
 		} else {
 			// The above expectation fails due to a size mismatch.
 			// This is not regular, but we don't make a
@@ -416,6 +420,8 @@ func main() {
 	dumpfmt := flag.Float64("dumpformat", 2, "version of dump format")
 	showproto := flag.Bool("showproto", false, "display protocol header compiled against")
 	showmessages := flag.Bool("showmessages", false, "display message definitions compiled against")
+	timeoffset := flag.String("timeoffset", "",
+		"time zone offset to display timestamps (<hours>h<mins>m format)")
 	flag.Parse()
 
 	if *showproto {
@@ -450,7 +456,15 @@ func main() {
 	case 1.0:
 		frm = &FUSEMsgReader10{fr}
 	case 2.0:
-		frm = &FUSEMsgReader20{fr}
+		frm20 := &FUSEMsgReader20{fr, nil}
+		if *timeoffset != "" {
+			dur, err := time.ParseDuration(*timeoffset)
+			if err != nil {
+				log.Fatalf("invalid duration given as time offset: %s", *timeoffset)
+			}
+			frm20.loc = time.FixedZone("display_TZ", int(dur.Seconds()))
+		}
+		frm = frm20
 	default:
 		log.Fatalf("unknown fusedump format version %.2f", *dumpfmt)
 	}
