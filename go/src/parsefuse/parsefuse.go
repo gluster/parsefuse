@@ -64,7 +64,7 @@ func truncate(lim int, a []interface{}) (truncated bool) {
 				truncated = true
 			}
 		case []interface{}:
-			truncated = truncated || truncate(lim, t)
+			truncated = truncate(lim, t) || truncated
 		}
 	}
 	return
@@ -78,7 +78,7 @@ type jrec struct {
 func formatJson(jw *json.Encoder, lim int, a ...interface{}) {
 	var jr jrec
 	if lim >= 0 {
-		jr.Truncated = truncate(lim, a)
+		jr.Truncated = truncate(lim, a[1:])
 	}
 	jr.Msg = a
 	err := jw.Encode(jr)
@@ -90,7 +90,7 @@ func formatJson(jw *json.Encoder, lim int, a ...interface{}) {
 func formatCodec(cw *codec.Encoder, lim int, a ...interface{}) {
 	var jr jrec
 	if lim >= 0 {
-		jr.Truncated = truncate(lim, a)
+		jr.Truncated = truncate(lim, a[1:])
 	}
 	jr.Msg = a
 	err := cw.Encode(jr)
