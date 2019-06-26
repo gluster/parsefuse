@@ -320,7 +320,9 @@ func (fmr *FUSEMsgReader20) readmsg() (dir byte, meta []interface{}, buf []byte)
 			// The above expectation fails due to a size mismatch.
 			// This is not regular, but we don't make a
 			// fuss about it.
-			meta[0] = buf[sizeu32:]
+			metaelem := make([]byte, len(buf)-sizeu32)
+			copy(metaelem, buf[sizeu32:])
+			meta[0] = metaelem
 		}
 
 		// Reading the remaining metadata items.
@@ -329,7 +331,9 @@ func (fmr *FUSEMsgReader20) readmsg() (dir byte, meta []interface{}, buf []byte)
 			if buf == nil {
 				shortread()
 			}
-			meta[i+1] = buf[sizeu32:]
+			metaelem := make([]byte, len(buf)-sizeu32)
+			copy(metaelem, buf[sizeu32:])
+			meta[i+1] = metaelem
 		}
 	}
 
