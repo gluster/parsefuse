@@ -82,7 +82,7 @@ class FuseMsg
   end
 
   def self.import_proto ch, ty, kw={}
-    import_proto_data ch, kw
+    import_proto_data ch, **kw
     import_proto_messages ty
     nil
   end
