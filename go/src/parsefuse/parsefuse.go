@@ -276,6 +276,7 @@ func (fmr *FUSEMsgReader10) readmsg() (dir byte, meta []interface{}, buf []byte)
 type FUSEMsgReader20 struct {
 	*FUSEReader
 	loc *time.Location
+	metarepr func([]byte) interface{}
 }
 
 func (fmr *FUSEMsgReader20) readmsg() (dir byte, meta []interface{}, buf []byte) {
@@ -320,9 +321,7 @@ func (fmr *FUSEMsgReader20) readmsg() (dir byte, meta []interface{}, buf []byte)
 			// The above expectation fails due to a size mismatch.
 			// This is not regular, but we don't make a
 			// fuss about it.
-			metaelem := make([]byte, len(buf)-sizeu32)
-			copy(metaelem, buf[sizeu32:])
-			meta[0] = metaelem
+			meta[0] = fmr.metarepr(buf[sizeu32:])
 		}
 
 		// Reading the remaining metadata items.
@@ -331,9 +330,7 @@ func (fmr *FUSEMsgReader20) readmsg() (dir byte, meta []interface{}, buf []byte)
 			if buf == nil {
 				shortread()
 			}
-			metaelem := make([]byte, len(buf)-sizeu32)
-			copy(metaelem, buf[sizeu32:])
-			meta[i+1] = metaelem
+			meta[i+1] = fmr.metarepr(buf[sizeu32:])
 		}
 	}
 
@@ -460,7 +457,19 @@ func main() {
 	case 1.0:
 		fmr = &FUSEMsgReader10{fr}
 	case 2.0:
-		fmr20 := &FUSEMsgReader20{fr, nil}
+		fmr20 := &FUSEMsgReader20{fr, nil, nil}
+		switch *format {
+		case "json":
+			fmr20.metarepr = func(b []byte) interface{} {
+				return fmt.Sprintf("%q", b)
+			}
+		default:
+			fmr20.metarepr = func(b []byte) interface{} {
+				bc := make([]byte, len(b))
+				copy(bc, b)
+				return bc
+			}
+		}
 		if *timeoffset != "" {
 			dur, err := time.ParseDuration(*timeoffset)
 			if err != nil {
