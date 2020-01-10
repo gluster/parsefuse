@@ -124,8 +124,13 @@ class FuseMsg
       def deploy!
         walk { |kv|
           tnam = kv[1]
-          sr = Ctypes[:Struct][tnam]
-          next unless sr
+          case tnam
+          when String
+            sr = Ctypes[:Struct][tnam]
+            next unless sr
+          else
+            sr,tnam  = tnam,nil
+          end
           sm = Msgnode.new tnam
           sr.each { |typ, fld| sm.<< typ, fld }
           kv[1] = sm.deploy!
@@ -317,13 +322,27 @@ class FuseMsg
 
   attr_accessor :in_head, :out_head, :in_body, :out_body
 
+  module FusedumpMeta
+
+    Size = [%w[uint32_t value]]
+    FusedumpTimespec = [%w[uint32_t len], %w[uint64_t sec], %w[uint32_t nsec]]
+    Buf = [%w[uint32_t len], "buf"]
+
+  end
+
+  class TimeBuf < Time
+
+    attr_accessor :buf
+
+  end
+
   def self.read_stream data
     data.respond_to? :read or data = StringIO.new(data)
     q = {}
-    head_get = proc { |t|
+    head_get = proc { |t,b|
       ts = t.to_s
       hsiz = sizeof(ts)
-      h = MsgBodyGeneric::Msgnode.new(t).populate! data.read(hsiz), Ctypes[:Struct][ts]
+      h = MsgBodyGeneric::Msgnode.new(t).populate! b + data.read(hsiz - b.size), Ctypes[:Struct][ts]
       [h, hsiz]
     }
     _FORGET = %w[FUSE_FORGET FUSE_BATCH_FORGET].map {|m|
@@ -331,9 +350,33 @@ class FuseMsg
     }
     loop do
       dir = data.read 1
-      yield case dir
+      countbuf = data.read sizeof(FusedumpMeta::Size)
+      count = MsgBodyGeneric::Msgnode.new.populate! countbuf, FusedumpMeta::Size
+      next if count.value.zero?
+      parts,hbeg = if count.value < 16
+        meta = MsgBodyGeneric::Msgnode.new
+        (count.value - 1).times { |i|
+          itemsizbuf = data.read(sizeof FusedumpMeta::Size)
+          itemsiz = MsgBodyGeneric::Msgnode.new.populate! itemsizbuf, FusedumpMeta::Size
+          databuf = itemsizbuf + data.read(itemsiz.value - itemsizbuf.size)
+          meta << if i == 0 and itemsiz.value == sizeof(FusedumpMeta::FusedumpTimespec)
+            # parse first item as timestamp if size is correct
+            ts = MsgBodyGeneric::Msgnode.new.populate! databuf, FusedumpMeta::FusedumpTimespec
+            t = TimeBuf.at(ts.sec, ts.nsec, :nsec)
+            t.buf = databuf
+            t
+          else
+            MsgBodyGeneric::Msgnode.new.populate! databuf, FusedumpMeta::Buf
+          end
+        }
+        [[meta], ""]
+      else
+        # fusedump v1
+        [[], countbuf]
+      end
+      yield parts.concat case dir
       when 'R'
-        in_head, hsiz = head_get[:fuse_in_header]
+        in_head, hsiz = head_get[:fuse_in_header, hbeg]
         in_head.tag = Messages[in_head.opcode] || "??"
         mbcls = MsgBodies[['R', Messages[in_head.opcode]]]
         mbcls ||= MsgBodyCore
@@ -343,7 +386,7 @@ class FuseMsg
         q[in_head.unique] = msg unless _FORGET.include? in_head.opcode
         [in_head, msg.in_body]
       when 'W'
-        out_head, hsiz = head_get[:fuse_out_header]
+        out_head, hsiz = head_get[:fuse_out_header, hbeg]
         if out_head.unique.zero?
           msg = new
           mbcls = MsgBodies[['W', Notifications[out_head.error]]]
