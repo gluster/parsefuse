@@ -552,11 +552,8 @@ func main() {
 		switch dir {
 		case 'R':
 			inh := datacaster.AsInHeader(buf)
-			opname := ""
-			if int(inh.Opcode) < len(protogen.FuseOpnames) {
-				opname = protogen.FuseOpnames[inh.Opcode]
-			}
-			if opname == "" {
+			opname, ok := protogen.FuseOpnames[inh.Opcode]
+			if !ok {
 				opname = fmt.Sprintf("OP#%d", inh.Opcode)
 			}
 			switch inh.Opcode {
@@ -593,15 +590,12 @@ func main() {
 			ouh := datacaster.AsOutHeader(buf)
 			buf = buf[outsize:]
 			if ouh.Unique == 0 {
-				opcode := ouh.Error
-				notifname := ""
-				if int(opcode) < len(protogen.FuseNotifynames) {
-					notifname = protogen.FuseNotifynames[opcode]
-				}
-				if notifname == "" {
+				opcode := uint32(ouh.Error)
+				notifname, ok := protogen.FuseNotifynames[opcode]
+				if !ok {
 					notifname = fmt.Sprintf("NOTIFY#%d", opcode)
 				}
-				body = protogen.ParseNotificationW(datacaster, uint32(opcode), buf)
+				body = protogen.ParseNotificationW(datacaster, opcode, buf)
 				formatter(*lim, meta, notifname, *ouh, body)
 			} else if opcode, ok := umap[ouh.Unique]; ok {
 				delete(umap, ouh.Unique)

@@ -55,7 +55,7 @@ const(
 Ctypes[:Enum].each do |e,a|
   ename = e.gsub(/\Afuse_?|_?code\Z/, "").capitalize
 %>
-var Fuse<%= ename %>names = [...]string{
+var Fuse<%= ename %>names = map[uint32]string{
 <%
   used = Set.new [nil]
   a.each do |n,v|
@@ -168,10 +168,10 @@ func Parse<%= "#{k}#{dir}" %>(datacaster DataCaster, opcode uint32, data []byte)
       end
   %>
 	default:
-		if FuseOpnames[opcode] == "" {
-			log.Printf("warning: unknown opcode %d", opcode)
+		if opname, ok := FuseOpnames[opcode]; ok {
+			log.Printf("warning: format spec missing for %s", opname)
 		} else {
-			log.Printf("warning: format spec missing for %s", FuseOpnames[opcode])
+			log.Printf("warning: unknown opcode %d", opcode)
 		}
 		a = append(a, data)
 	}
