@@ -46,6 +46,7 @@
         "FUSE_UNLINK":        ["string"],
         "FUSE_WRITE":         ["fuse_write_in", "buf"],
         "FUSE_INTERRUPT":     ["fuse_interrupt_in"],
+        "FUSE_COPY_FILE_RANGE": ["fuse_copy_file_range_in"],
         "CUSE_INIT":          ["cuse_init_in"]
     },
     "W": {
@@ -100,6 +101,7 @@
         # "FUSE_INTERRUPT":     null,
         # ie. response is optional (re-asking for interrupt with errno EAGAIN)
         "FUSE_INTERRUPT":     [],
+        "FUSE_COPY_FILE_RANGE": ["fuse_write_out"],
         "FUSE_NOTIFY_POLL":   ["fuse_notify_poll_wakeup_out"],
         "FUSE_NOTIFY_INVAL_INODE": ["fuse_notify_inval_inode_out"],
         # this is not entirely correct, instead of "string" there is a

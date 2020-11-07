@@ -135,6 +135,7 @@ func Parse<%= "#{k}#{dir}" %>(datacaster DataCaster, opcode uint32, data []byte)
 	switch opcode {
   <%
     mmap.each do |c,d|
+      FuseMsg.const_get(k + ?s).value? c or next
       [Notifications.values.include?(c), k == "Notification"].uniq.size == 1 or next
       d or next
       d = d.map { |t| structname(t) || t }
