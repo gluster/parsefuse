@@ -349,7 +349,7 @@ class FuseMsg
       FuseMsg::Messages.invert[m]
     }
     loop do
-      dir = data.read 1
+      dir = data.read(1) or break
       countbuf = data.read sizeof(FusedumpMeta::Size)
       count = MsgBodyGeneric::Msgnode.new.populate! countbuf, FusedumpMeta::Size
       next if count.value.zero?
