@@ -354,6 +354,7 @@ class FuseMsg
       count = MsgBodyGeneric::Msgnode.new.populate! countbuf, FusedumpMeta::Size
       next if count.value.zero?
       parts,hbeg = if count.value < 16
+        # fusedump v2
         meta = MsgBodyGeneric::Msgnode.new
         (count.value - 1).times { |i|
           itemsizbuf = data.read(sizeof FusedumpMeta::Size)
@@ -374,6 +375,16 @@ class FuseMsg
         # fusedump v1
         [[], countbuf]
       end
+      # dir and (in case of v2 dumps) count are not included in the yielded message data,
+      # so the blobs available via the #buf method of the compoments of the yielded messages
+      # do not reconstruct the original binary data without gaps. This is done for presentational
+      # purposes: the user visible output is generated as the pretty print of the yielded messages,
+      # so we include only those parts that we want the user to see. However, the content
+      # of the gaps can be reconstructed from the included parts: if the yielded message
+      # data is m, then
+      # - dir is avaliable as m[1].tag == :fuse_out_header ? ?W : ?R
+      # - count is available as m[0].size + 1, so the original blob of count (ie. countbuf)
+      #   is avaliable as [m[0].size + 1].pack(?L).
       yield parts.concat case dir
       when 'R'
         in_head, hsiz = head_get[:fuse_in_header, hbeg]
