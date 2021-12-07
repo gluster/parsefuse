@@ -2,6 +2,7 @@
 
 cd "`dirname $0`"
 export GOPATH="$PWD/go"
+export GO111MODULE=off
 protogendir="$GOPATH/src/parsefuse/protogen"
 
 if ! [ $# -eq 1 ]; then
